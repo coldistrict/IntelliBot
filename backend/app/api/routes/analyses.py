@@ -1,0 +1,439 @@
+from datetime import UTC, datetime
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from app.db.session import get_db_session
+from app.models import AnalysisRequest, AnalysisRun, Market, Review, RuleParse
+from app.models.enums import (
+    InputTypeEnum,
+    ModeEnum,
+    RequestStatusEnum,
+    SourceKindEnum,
+    SourceTierEnum,
+    TemplateKey,
+)
+from app.schemas.analysis import (
+    AnalysisAuditResponse,
+    AnalysisDetailResponse,
+    AnalysisListResponse,
+    AnalysisProgressResponse,
+    AnalysisPresentationResponse,
+    AnalysisProgressPollResponse,
+    AnalysisProgressPresentationResponse,
+    AnalysisQueuedResponse,
+    AnalysisRequestSummary,
+    AutoScanRunRequest,
+    DocumentResponse,
+    FactorResponse,
+    FactClaimResponse,
+    ManualAnalysisCreateRequest,
+    PassageResponse,
+    RecommendationResponse,
+    ReviewCreateRequest,
+    ReviewResponse,
+    RuleParseResponse,
+    AnalysisRunResponse,
+    PresentationArtifactStatusResponse,
+    SocialIntelSummaryResponse,
+    SourceResponse,
+)
+from app.schemas.market import MarketResponse
+from app.services.analysis_artifacts import build_artifact_statuses
+from app.services.analysis_audit import build_analysis_audit, build_display_summary
+from app.services.analysis_dispatch import AnalysisDispatcher, get_analysis_dispatcher, reset_request_to_queue
+from app.services.analysis_presentation import build_analysis_presentation
+from app.services.analysis_pipeline import AnalysisProcessor, get_analysis_processor
+from app.services.analysis_progress import build_progress_snapshot, initial_progress_payload
+
+router = APIRouter(prefix="/analyses")
+
+
+def _latest_rule_parse(request: AnalysisRequest) -> RuleParse | None:
+    if not request.rule_parses:
+        return None
+    return max(request.rule_parses, key=lambda item: item.created_at)
+
+
+def _latest_run(request: AnalysisRequest) -> AnalysisRun | None:
+    if not request.analysis_runs:
+        return None
+    return max(request.analysis_runs, key=lambda item: item.created_at)
+
+
+def _build_summary(request: AnalysisRequest) -> AnalysisRequestSummary:
+    latest_run = _latest_run(request)
+    active_run = latest_run if request.status == RequestStatusEnum.COMPLETE else None
+    review_count = len(active_run.reviews) if active_run else 0
+    progress = build_progress_snapshot(request)
+    display_summary = build_display_summary(request, analysis_run=active_run)
+
+    return AnalysisRequestSummary.model_validate(request).model_copy(
+        update={
+            "latest_recommendation_label": (
+                active_run.recommendation_label if active_run else None
+            ),
+            "latest_confidence_label": active_run.confidence_label if active_run else None,
+            "review_count": review_count,
+            "progress_percent": progress["percent_complete"],
+            "current_stage_label": progress["current_label"],
+            "current_stage_note": progress["current_note"],
+            "display_summary": display_summary,
+            "qualitative_label": active_run.qualitative_label if active_run else None,
+        },
+    )
+
+
+def _manual_input_payload(submission: ManualAnalysisCreateRequest) -> dict:
+    return {
+        "polymarket_url": str(submission.polymarket_url) if submission.polymarket_url else None,
+        "polymarket_market_id": submission.polymarket_market_id,
+        "custom_claim": submission.custom_claim,
+        "deadline_text": submission.deadline_text,
+        "include_premium": submission.include_premium,
+        "include_live_x_intelligence": submission.include_live_x_intelligence,
+    }
+
+
+def _find_linked_market(session: Session, submission: ManualAnalysisCreateRequest) -> Market | None:
+    if submission.polymarket_market_id:
+        return session.scalar(
+            select(Market).where(Market.polymarket_id == submission.polymarket_market_id)
+        )
+    if submission.polymarket_url:
+        return session.scalar(select(Market).where(Market.url == str(submission.polymarket_url)))
+    return None
+
+
+def _queue_request(
+    *,
+    session: Session,
+    request: AnalysisRequest,
+    processor: AnalysisProcessor,
+    dispatcher: AnalysisDispatcher,
+) -> AnalysisQueuedResponse:
+    session.add(request)
+    session.commit()
+    session.refresh(request)
+    dispatcher.dispatch(processor, request.id)
+    return AnalysisQueuedResponse(request=_build_summary(request))
+
+
+def _build_progress_presentation(
+    request: AnalysisRequest,
+    *,
+    latest_rule_parse: RuleParse | None,
+    latest_run: AnalysisRun | None,
+) -> AnalysisProgressPresentationResponse:
+    progress = build_progress_snapshot(request)
+    latest_sources = latest_run.sources if latest_run else []
+    latest_factors = latest_run.factors if latest_run else []
+
+    return AnalysisProgressPresentationResponse(
+        artifact_statuses=[
+            PresentationArtifactStatusResponse.model_validate(item)
+            for item in build_artifact_statuses(
+                progress=progress,
+                has_rule_parse=latest_rule_parse is not None,
+                has_sources=bool(latest_sources),
+                has_social_sources=any(
+                    source.source_kind in {SourceKindEnum.LIVE_SOCIAL, SourceKindEnum.MANUAL_SOCIAL}
+                    for source in latest_sources
+                ),
+                has_factors=bool(latest_factors),
+                has_analysis_run=latest_run is not None,
+                has_final_summary=bool(latest_run and latest_run.final_summary),
+            )
+        ]
+    )
+
+
+@router.post("/manual", response_model=AnalysisQueuedResponse, status_code=status.HTTP_202_ACCEPTED)
+def create_manual_analysis(
+    submission: ManualAnalysisCreateRequest,
+    processor: AnalysisProcessor = Depends(get_analysis_processor),
+    dispatcher: AnalysisDispatcher = Depends(get_analysis_dispatcher),
+    session: Session = Depends(get_db_session),
+) -> AnalysisQueuedResponse:
+    linked_market = _find_linked_market(session, submission)
+
+    request = AnalysisRequest(
+        mode=ModeEnum.MANUAL,
+        input_type=submission.resolved_input_type,
+        input_text=submission.resolved_input_text,
+        input_payload=_manual_input_payload(submission),
+        progress_json=initial_progress_payload(),
+        market_id=linked_market.id if linked_market else None,
+        template_requested=submission.template_requested,
+        status=RequestStatusEnum.QUEUED,
+        current_stage="queued",
+    )
+    return _queue_request(
+        session=session,
+        request=request,
+        processor=processor,
+        dispatcher=dispatcher,
+    )
+
+
+@router.post("/auto-scan/run", response_model=AnalysisQueuedResponse, status_code=status.HTTP_202_ACCEPTED)
+def trigger_auto_scan(
+    payload: AutoScanRunRequest,
+    processor: AnalysisProcessor = Depends(get_analysis_processor),
+    dispatcher: AnalysisDispatcher = Depends(get_analysis_dispatcher),
+    session: Session = Depends(get_db_session),
+) -> AnalysisQueuedResponse:
+    request = AnalysisRequest(
+        mode=ModeEnum.AUTO,
+        input_type=InputTypeEnum.CUSTOM_CLAIM,
+        input_text="AUTO_SCAN_TRIGGER",
+        input_payload={"trigger": "manual_api", "note": payload.note},
+        progress_json=initial_progress_payload(),
+        template_requested=TemplateKey.OFFICIAL_EVENT,
+        status=RequestStatusEnum.QUEUED,
+        current_stage="queued",
+    )
+    return _queue_request(
+        session=session,
+        request=request,
+        processor=processor,
+        dispatcher=dispatcher,
+    )
+
+
+@router.get("", response_model=AnalysisListResponse)
+def list_analyses(
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_db_session),
+) -> AnalysisListResponse:
+    total = session.scalar(select(func.count()).select_from(AnalysisRequest)) or 0
+    items = session.scalars(
+        select(AnalysisRequest)
+        .options(
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.reviews),
+            selectinload(AnalysisRequest.market),
+        )
+        .order_by(AnalysisRequest.created_at.desc(), AnalysisRequest.id.desc())
+        .limit(limit)
+        .offset(offset)
+    ).all()
+    return AnalysisListResponse(items=[_build_summary(item) for item in items], total=total)
+
+
+@router.get("/{analysis_id}", response_model=AnalysisDetailResponse)
+def get_analysis_detail(
+    analysis_id: int,
+    session: Session = Depends(get_db_session),
+) -> AnalysisDetailResponse:
+    request = session.scalar(
+        select(AnalysisRequest)
+        .where(AnalysisRequest.id == analysis_id)
+        .options(
+            selectinload(AnalysisRequest.market),
+            selectinload(AnalysisRequest.rule_parses),
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.recommendation),
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.social_intel_summary),
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.reviews),
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.sources),
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.documents),
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.passages),
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.fact_claims),
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.factors),
+        )
+    )
+    if request is None:
+        raise HTTPException(status_code=404, detail="Analysis request not found.")
+
+    latest_rule_parse = _latest_rule_parse(request)
+    latest_run = _latest_run(request)
+    progress = build_progress_snapshot(request)
+    trusted_social_sources = []
+    if latest_run:
+        trusted_social_sources = [
+            SourceResponse.model_validate(source)
+            for source in latest_run.sources
+            if source.source_kind == SourceKindEnum.LIVE_SOCIAL
+            and source.source_tier in {SourceTierEnum.OFFICIAL_SOCIAL, SourceTierEnum.HIGH_TRUST_SOCIAL}
+        ]
+    recommendation = latest_run.recommendation if latest_run else None
+    display_summary = build_display_summary(
+        request,
+        rule_parse=latest_rule_parse,
+        analysis_run=latest_run,
+        recommendation=recommendation,
+        factors=latest_run.factors if latest_run else None,
+    )
+    audit = (
+        build_analysis_audit(
+            request=request,
+            rule_parse=latest_rule_parse,
+            analysis_run=latest_run,
+            recommendation=recommendation,
+            sources=latest_run.sources if latest_run else [],
+            facts=latest_run.fact_claims if latest_run else [],
+            factors=latest_run.factors if latest_run else [],
+            social_intel_summary=latest_run.social_intel_summary if latest_run else None,
+        )
+        if latest_run
+        else None
+    )
+    presentation = build_analysis_presentation(
+        request=request,
+        rule_parse=latest_rule_parse,
+        analysis_run=latest_run,
+        recommendation=recommendation,
+        sources=latest_run.sources if latest_run else [],
+        facts=latest_run.fact_claims if latest_run else [],
+        factors=latest_run.factors if latest_run else [],
+    )
+
+    return AnalysisDetailResponse(
+        request=_build_summary(request),
+        market=MarketResponse.model_validate(request.market) if request.market else None,
+        latest_rule_parse=(
+            RuleParseResponse.model_validate(latest_rule_parse) if latest_rule_parse else None
+        ),
+        latest_run=AnalysisRunResponse.model_validate(latest_run) if latest_run else None,
+        recommendation=(
+            RecommendationResponse.model_validate(recommendation)
+            if recommendation
+            else None
+        ),
+        progress=AnalysisProgressResponse.model_validate(progress),
+        audit=AnalysisAuditResponse.model_validate(audit) if audit else None,
+        presentation=AnalysisPresentationResponse.model_validate(presentation),
+        display_summary=display_summary,
+        last_updated_at=request.updated_at,
+        social_intel_summary=(
+            SocialIntelSummaryResponse.model_validate(latest_run.social_intel_summary)
+            if latest_run and latest_run.social_intel_summary
+            else None
+        ),
+        sources=(
+            [SourceResponse.model_validate(source) for source in latest_run.sources]
+            if latest_run
+            else []
+        ),
+        documents=(
+            [DocumentResponse.model_validate(document) for document in latest_run.documents]
+            if latest_run
+            else []
+        ),
+        passages=(
+            [
+                PassageResponse.model_validate(passage)
+                for passage in sorted(
+                    latest_run.passages,
+                    key=lambda item: (item.source_id, -item.relevance_score, item.passage_index),
+                )
+            ]
+            if latest_run
+            else []
+        ),
+        trusted_social_sources=trusted_social_sources,
+        fact_claims=(
+            [FactClaimResponse.model_validate(fact_claim) for fact_claim in latest_run.fact_claims]
+            if latest_run
+            else []
+        ),
+        factors=(
+            [FactorResponse.model_validate(factor) for factor in latest_run.factors]
+            if latest_run
+            else []
+        ),
+        reviews=(
+            [ReviewResponse.model_validate(review) for review in latest_run.reviews]
+            if latest_run
+            else []
+        ),
+    )
+
+
+@router.get("/{analysis_id}/progress", response_model=AnalysisProgressPollResponse)
+def get_analysis_progress(
+    analysis_id: int,
+    session: Session = Depends(get_db_session),
+) -> AnalysisProgressPollResponse:
+    request = session.scalar(
+        select(AnalysisRequest)
+        .where(AnalysisRequest.id == analysis_id)
+        .options(
+            selectinload(AnalysisRequest.rule_parses),
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.reviews),
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.sources),
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.factors),
+        )
+    )
+    if request is None:
+        raise HTTPException(status_code=404, detail="Analysis request not found.")
+
+    latest_rule_parse = _latest_rule_parse(request)
+    latest_run = _latest_run(request)
+    progress = build_progress_snapshot(request)
+
+    return AnalysisProgressPollResponse(
+        request=_build_summary(request),
+        progress=AnalysisProgressResponse.model_validate(progress),
+        presentation=_build_progress_presentation(
+            request,
+            latest_rule_parse=latest_rule_parse,
+            latest_run=latest_run,
+        ),
+        last_updated_at=request.updated_at,
+    )
+
+
+@router.post("/{analysis_id}/review", response_model=ReviewResponse)
+def review_analysis(
+    analysis_id: int,
+    payload: ReviewCreateRequest,
+    session: Session = Depends(get_db_session),
+) -> ReviewResponse:
+    request = session.scalar(
+        select(AnalysisRequest)
+        .where(AnalysisRequest.id == analysis_id)
+        .options(selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.reviews))
+    )
+    if request is None:
+        raise HTTPException(status_code=404, detail="Analysis request not found.")
+
+    latest_run = _latest_run(request)
+    if latest_run is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Analysis has not produced a run yet, so it cannot be reviewed.",
+        )
+
+    review = Review(
+        analysis_run_id=latest_run.id,
+        decision=payload.decision,
+        note=payload.note,
+        created_at=datetime.now(UTC),
+    )
+    session.add(review)
+    session.commit()
+    session.refresh(review)
+    return ReviewResponse.model_validate(review)
+
+
+@router.post("/{analysis_id}/rerun", response_model=AnalysisQueuedResponse, status_code=status.HTTP_202_ACCEPTED)
+def rerun_analysis(
+    analysis_id: int,
+    processor: AnalysisProcessor = Depends(get_analysis_processor),
+    dispatcher: AnalysisDispatcher = Depends(get_analysis_dispatcher),
+    session: Session = Depends(get_db_session),
+) -> AnalysisQueuedResponse:
+    request = session.get(AnalysisRequest, analysis_id)
+    if request is None:
+        raise HTTPException(status_code=404, detail="Analysis request not found.")
+
+    reset_request_to_queue(request)
+    return _queue_request(
+        session=session,
+        request=request,
+        processor=processor,
+        dispatcher=dispatcher,
+    )

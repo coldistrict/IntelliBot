@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --paper: #f5efe4;
+  --paper-strong: #fbf8f1;
+  --paper-muted: #efe6d8;
+  --ink-soft: rgba(22, 17, 12, 0.72);
+  --ink-faint: rgba(22, 17, 12, 0.52);
+  --rule: rgba(22, 17, 12, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent 18%),
+    linear-gradient(180deg, #f6f0e6 0%, #f2ebde 56%, #ece2d4 100%);
+  color: #16110c;
+  text-rendering: optimizeLegibility;
+}
+
+.font-serif {
+  font-family: var(--font-serif), ui-serif, Georgia, serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+::selection {
+  background: rgba(201, 87, 47, 0.18);
+  color: #16110c;
+}
+
+.memo-rule {
+  border-top: 1px solid var(--rule);
+}

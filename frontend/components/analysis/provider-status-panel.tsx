@@ -1,0 +1,101 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+import { ProviderStatus, fetchProviderStatus } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
+import { Panel } from "@/components/ui/panel";
+
+const rows: Array<{
+  key: keyof ProviderStatus;
+  label: string;
+  note: string;
+  nextStep: string;
+}> = [
+  {
+    key: "openai_configured",
+    label: "OpenAI",
+    note: "Primary structured output model for rules, facts, verification, and the memo brief.",
+    nextStep: "Add OPENAI_API_KEY to the root .env file.",
+  },
+  {
+    key: "grok_configured",
+    label: "Grok",
+    note: "Live X intelligence and secondary narrative review.",
+    nextStep: "Add XAI_API_KEY to the root .env file.",
+  },
+  {
+    key: "search_configured",
+    label: "Search",
+    note: "Web discovery and retrieval for official sources and news coverage.",
+    nextStep: "Add TAVILY_API_KEY so the desk can discover sources.",
+  },
+  {
+    key: "fred_configured",
+    label: "FRED",
+    note: "Optional macro data feed for stronger economic-policy analysis.",
+    nextStep: "Optional: add FRED_API_KEY for richer macro data.",
+  },
+  {
+    key: "premium_session_available",
+    label: "Premium session",
+    note: "Optional session state for on-demand premium article fetches.",
+    nextStep: "Optional: save a Playwright session file when you want premium retrieval.",
+  },
+];
+
+export function ProviderStatusPanel() {
+  const [status, setStatus] = useState<ProviderStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const payload = await fetchProviderStatus();
+        setStatus(payload);
+        setError(null);
+      } catch (loadError) {
+        setError(
+          loadError instanceof Error ? loadError.message : "Unable to load provider status.",
+        );
+      }
+    }
+
+    void load();
+  }, []);
+
+  return (
+    <Panel className="p-6">
+      <div className="border-b border-black/8 pb-4">
+        <p className="text-[10px] uppercase tracking-[0.22em] text-ink/46">Provider readiness</p>
+        <h3 className="mt-2 font-serif text-2xl text-ink">What the desk can use right now</h3>
+      </div>
+      {error ? <p className="mt-4 text-sm text-ember">{error}</p> : null}
+      {status ? (
+        <div className="mt-5 space-y-4">
+          {rows.map((row) => (
+            <div
+              key={row.key}
+              className="grid gap-3 border-b border-black/6 pb-4 last:border-b-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_10rem]"
+            >
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-ink">{row.label}</p>
+                  <Badge variant={status[row.key] ? "yes" : "warning"}>
+                    {status[row.key] ? "ready" : "missing"}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-sm leading-7 text-ink/62">{row.note}</p>
+              </div>
+              <div className="text-sm leading-7 text-ink/56">
+                {status[row.key] ? "No action needed." : row.nextStep}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-ink/55">Loading provider readiness…</p>
+      )}
+    </Panel>
+  );
+}

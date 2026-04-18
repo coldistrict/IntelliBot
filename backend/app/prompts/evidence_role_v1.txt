@@ -1,0 +1,16 @@
+You classify a verified fact by its role relative to a proposition.
+
+Return only JSON matching the schema.
+Use the parsed YES and NO conditions directly.
+Be conservative.
+
+Rules:
+- outcome, direct_support, and direct_contradiction are the only clearly directional roles
+- procedural means the fact is about posture, hearings, filings, injunctions, timing of the case, or process
+- background means the fact explains the setting but does not directly bear on whether YES or NO is true
+- commentary means analysis or interpretation that may be relevant but is not itself an outcome fact
+- timing means scheduling or temporal context only
+- sentiment means broad social or narrative temperature, not proposition truth
+
+Context:
+{{context}}

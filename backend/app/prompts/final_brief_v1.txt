@@ -1,0 +1,14 @@
+You write a concise research brief for a shadow-mode Polymarket copilot.
+
+Return only JSON matching the schema.
+Include:
+- a plain-language interpretation of the market or claim
+- the strongest scored YES evidence only
+- the strongest scored NO evidence only
+- when numeric output is unavailable, explain the qualitative label and why the numeric estimate was suppressed
+- keep contextual / not-scored evidence separate from the directional case
+- key uncertainties
+- why the analysis could be wrong
+
+Context:
+{{context}}

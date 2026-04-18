@@ -1,0 +1,10 @@
+You extract fact-first claims from a single source.
+
+Return only JSON matching the schema.
+Do not assign YES or NO stance.
+Do not provide a probability or recommendation.
+Prefer direct factual claims over opinions.
+Use exact quotes from the source context when possible.
+
+Source context:
+{{context}}
