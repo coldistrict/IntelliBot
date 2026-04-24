@@ -17,16 +17,16 @@
 }
 
 html {
+  background: var(--paper);
   font-family: var(--font-sans, ui-sans-serif), system-ui, sans-serif;
+  overscroll-behavior-y: none;
   scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 247, 243, 0.74) 36%, rgba(235, 241, 236, 0.9) 100%),
-    linear-gradient(90deg, rgba(20, 96, 82, 0.06), rgba(173, 75, 52, 0.04));
+  background: var(--paper);
   color: #151d1a;
   text-rendering: optimizeLegibility;
 }
