@@ -25,6 +25,16 @@ type AuditFocus = {
   passageId?: number | null;
 };
 
+const detailNavItems = [
+  { id: "analysis-summary", label: "Summary" },
+  { id: "analysis-memo", label: "Memo" },
+  { id: "analysis-social", label: "Social" },
+  { id: "analysis-sources", label: "Sources" },
+  { id: "analysis-status", label: "Status" },
+  { id: "analysis-market", label: "Market" },
+  { id: "analysis-rules", label: "Rules" },
+];
+
 function badgeVariant(label: string | null | undefined) {
   if (!label) {
     return "muted" as const;
@@ -114,6 +124,10 @@ function sourceMetaString(source: Source, key: string): string | null {
 function sourceMetaNumber(source: Source, key: string): number | null {
   const value = sourceMeta(source, key);
   return typeof value === "number" ? value : null;
+}
+
+function scrollToDetailSection(id: string) {
+  document.getElementById(id)?.scrollIntoView({ block: "start", behavior: "smooth" });
 }
 
 function SectionPlaceholder({ title, note }: { title: string; note: string }) {
@@ -400,7 +414,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
       />
 
       <div className="space-y-6">
-        <section className="border-b border-black/8 pb-5">
+        <section id="analysis-summary" className="scroll-mt-24 border-b border-black/8 pb-5">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={badgeVariant(detail.request.status)}>{detail.request.status}</Badge>
             {detail.request.template_selected ? <Badge variant="muted">{detail.request.template_selected}</Badge> : null}
@@ -474,7 +488,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
           </Panel>
         </section>
 
-        <Panel className="space-y-5 p-5">
+        <Panel id="analysis-memo" className="scroll-mt-24 space-y-5 p-5">
           <div className="border-b border-black/8 pb-3">
             <p className="section-label">Working memo</p>
             <h2 className="mt-1.5 font-serif text-3xl text-ink">What this means</h2>
@@ -574,7 +588,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
           </div>
         </Panel>
 
-        <Panel className="space-y-5 p-5">
+        <Panel id="analysis-social" className="scroll-mt-24 space-y-5 p-5">
           <div className="border-b border-black/8 pb-3">
             <p className="section-label">Social intelligence</p>
             <h2 className="mt-1.5 font-serif text-3xl text-ink">Trusted accounts and narrative context</h2>
@@ -617,7 +631,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
           )}
         </Panel>
 
-        <Panel className="space-y-5 p-5">
+        <Panel id="analysis-sources" className="scroll-mt-24 space-y-5 p-5">
           <div className="border-b border-black/8 pb-3">
             <p className="section-label">Sources</p>
             <h2 className="mt-1.5 font-serif text-3xl text-ink">Source material and grounded passages</h2>
@@ -726,6 +740,27 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
 
         <Panel className="space-y-4 p-4">
           <div className="border-b border-black/8 pb-3">
+            <p className="section-label">Jump to</p>
+            <p className="mt-2 text-sm leading-6 text-ink/58">
+              Move between the main read, evidence, and run metadata.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {detailNavItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => scrollToDetailSection(item.id)}
+                className="quiet-action justify-center"
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </Panel>
+
+        <Panel id="analysis-status" className="scroll-mt-24 space-y-4 p-4">
+          <div className="border-b border-black/8 pb-3">
             <p className="section-label">Run status</p>
             <p className="mt-2 text-2xl font-semibold text-ink">{detail.progress.percent_complete}%</p>
             <p className="mt-2 text-sm leading-6 text-ink/58">
@@ -749,7 +784,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
           </div>
         </Panel>
 
-        <Panel className="space-y-4 p-4">
+        <Panel id="analysis-market" className="scroll-mt-24 space-y-4 p-4">
           <div className="border-b border-black/8 pb-3">
             <p className="section-label">Market context</p>
             <h3 className="mt-2 text-lg font-semibold text-ink">
@@ -768,7 +803,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
           </div>
         </Panel>
 
-        <Panel className="space-y-4 p-4">
+        <Panel id="analysis-rules" className="scroll-mt-24 space-y-4 p-4">
           <div className="border-b border-black/8 pb-3">
             <p className="section-label">Rule parse</p>
             <h3 className="mt-2 text-lg font-semibold text-ink">

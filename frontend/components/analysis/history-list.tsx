@@ -6,6 +6,16 @@ import Link from "next/link";
 import { AnalysisSummary, fetchAnalyses } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/ui/panel";
+import { cn } from "@/lib/utils";
+
+type StatusFilter = "all" | "active" | "complete" | "failed";
+
+const statusFilters: Array<{ value: StatusFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "active", label: "Active" },
+  { value: "complete", label: "Complete" },
+  { value: "failed", label: "Failed" },
+];
 
 function badgeVariant(status: string) {
   if (status === "complete") {
@@ -15,6 +25,31 @@ function badgeVariant(status: string) {
     return "no" as const;
   }
   return "warning" as const;
+}
+
+function isActiveStatus(status: string) {
+  return status === "queued" || status === "running";
+}
+
+function itemSearchText(item: AnalysisSummary) {
+  return [
+    item.input_text,
+    item.display_summary,
+    item.current_stage_note,
+    item.current_stage_label,
+    item.template_selected,
+    item.latest_confidence_label,
+    item.status,
+    item.mode,
+    item.input_type,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function hasTemplate(value: AnalysisSummary["template_selected"]): value is NonNullable<AnalysisSummary["template_selected"]> {
+  return value !== null && value !== undefined;
 }
 
 function AnalysisRow({ item }: { item: AnalysisSummary }) {
@@ -67,6 +102,9 @@ export function HistoryList() {
   const [items, setItems] = useState<AnalysisSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [templateFilter, setTemplateFilter] = useState("all");
 
   useEffect(() => {
     async function load() {
@@ -88,15 +126,54 @@ export function HistoryList() {
     return () => window.clearInterval(interval);
   }, []);
 
-  const running = useMemo(
-    () => items.filter((item) => item.status === "queued" || item.status === "running"),
+  const templateOptions = useMemo(
+    () =>
+      [...new Set(items.map((item) => item.template_selected).filter(hasTemplate))]
+        .sort((left, right) => left.localeCompare(right)),
     [items],
   );
-  const completed = useMemo(
-    () => items.filter((item) => item.status !== "queued" && item.status !== "running"),
+  const filteredItems = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return items.filter((item) => {
+      if (statusFilter === "active" && !isActiveStatus(item.status)) {
+        return false;
+      }
+      if (statusFilter === "complete" && item.status !== "complete") {
+        return false;
+      }
+      if (statusFilter === "failed" && item.status !== "failed") {
+        return false;
+      }
+      if (templateFilter !== "all" && item.template_selected !== templateFilter) {
+        return false;
+      }
+      if (normalizedQuery && !itemSearchText(item).includes(normalizedQuery)) {
+        return false;
+      }
+      return true;
+    });
+  }, [items, query, statusFilter, templateFilter]);
+  const running = useMemo(
+    () => items.filter((item) => isActiveStatus(item.status)),
     [items],
+  );
+  const filteredRunning = useMemo(
+    () => filteredItems.filter((item) => isActiveStatus(item.status)),
+    [filteredItems],
+  );
+  const filteredCompleted = useMemo(
+    () => filteredItems.filter((item) => !isActiveStatus(item.status)),
+    [filteredItems],
   );
   const failedCount = useMemo(() => items.filter((item) => item.status === "failed").length, [items]);
+  const hasFilters = query.trim().length > 0 || statusFilter !== "all" || templateFilter !== "all";
+
+  function resetFilters() {
+    setQuery("");
+    setStatusFilter("all");
+    setTemplateFilter("all");
+  }
 
   if (error) {
     return (
@@ -119,6 +196,70 @@ export function HistoryList() {
           denser reading log you can reopen at any time.
         </p>
       </section>
+
+      <Panel className="p-5">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <label className="block">
+            <span className="section-label">Search</span>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="field-control mt-2"
+              placeholder="Search claims, summaries, stages, templates..."
+              type="search"
+            />
+          </label>
+
+          <div className="grid gap-3 sm:grid-cols-[minmax(12rem,16rem)_auto]">
+            <label className="block">
+              <span className="section-label">Template</span>
+              <select
+                value={templateFilter}
+                onChange={(event) => setTemplateFilter(event.target.value)}
+                className="field-control mt-2"
+              >
+                <option value="all">All templates</option>
+                {templateOptions.map((template) => (
+                  <option key={template} value={template}>
+                    {template.replaceAll("_", " ")}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={resetFilters}
+              disabled={!hasFilters}
+              className="secondary-action mt-6 disabled:bg-white/45"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3 border-t border-black/8 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-1.5">
+            {statusFilters.map((filter) => (
+              <button
+                key={filter.value}
+                type="button"
+                onClick={() => setStatusFilter(filter.value)}
+                className={cn(
+                  "rounded-md border px-3 py-2 text-sm font-semibold transition",
+                  statusFilter === filter.value
+                    ? "border-ink bg-ink text-white"
+                    : "border-black/10 bg-white/65 text-ink/64 hover:bg-white hover:text-ink",
+                )}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-sm text-ink/56">
+            Showing {filteredItems.length} of {items.length} runs
+          </p>
+        </div>
+      </Panel>
 
       <section className="grid gap-3 sm:grid-cols-3">
         <Panel className="p-4">
@@ -146,8 +287,12 @@ export function HistoryList() {
         <div>
           {!hasLoaded ? (
             <p className="py-5 text-sm leading-7 text-ink/58">Loading active analyses...</p>
-          ) : running.length ? (
-            running.map((item) => <AnalysisRow key={item.id} item={item} />)
+          ) : filteredRunning.length ? (
+            filteredRunning.map((item) => <AnalysisRow key={item.id} item={item} />)
+          ) : hasFilters ? (
+            <p className="py-5 text-sm leading-7 text-ink/58">
+              No active analyses match the current filters.
+            </p>
           ) : (
             <p className="py-5 text-sm leading-7 text-ink/58">
               No active analyses right now. Start one from Manual Analysis.
@@ -164,8 +309,12 @@ export function HistoryList() {
         <div>
           {!hasLoaded ? (
             <p className="py-5 text-sm leading-7 text-ink/58">Loading finished runs...</p>
-          ) : completed.length ? (
-            completed.map((item) => <AnalysisRow key={item.id} item={item} />)
+          ) : filteredCompleted.length ? (
+            filteredCompleted.map((item) => <AnalysisRow key={item.id} item={item} />)
+          ) : hasFilters ? (
+            <p className="py-5 text-sm leading-7 text-ink/58">
+              No finished runs match the current filters.
+            </p>
           ) : (
             <p className="py-5 text-sm leading-7 text-ink/58">
               Completed analyses will appear here once the desk has some history.
