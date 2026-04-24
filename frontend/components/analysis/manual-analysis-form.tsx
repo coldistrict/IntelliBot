@@ -11,6 +11,21 @@ type TemplateSelection =
   | "auto"
   | NonNullable<ManualAnalysisPayload["template_requested"]>;
 
+const inputModeOptions: Array<{ value: "custom_claim" | "market_id" | "market_url"; label: string }> = [
+  { value: "custom_claim", label: "Custom claim" },
+  { value: "market_id", label: "Market ID" },
+  { value: "market_url", label: "Polymarket URL" },
+];
+
+const templateOptions: Array<{ value: TemplateSelection; label: string }> = [
+  { value: "auto", label: "Auto-detect" },
+  { value: "official_event", label: "Official event" },
+  { value: "macro_policy", label: "Macro policy" },
+  { value: "legal_case", label: "Legal case" },
+  { value: "narrative_manual", label: "Narrative manual" },
+  { value: "generic_manual", label: "Generic manual" },
+];
+
 function defaultLiveXValue(templateRequested: TemplateSelection) {
   return templateRequested !== "official_event";
 }
@@ -46,6 +61,7 @@ export function ManualAnalysisForm() {
     }
     return "Ask a direct claim, such as “Will the Fed cut rates by June?” or “Will SCOTUS strike this down?”";
   }, [inputMode]);
+  const canSubmit = primaryValue.trim().length > 0 && !isSubmitting;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -88,13 +104,13 @@ export function ManualAnalysisForm() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <section className="max-w-5xl space-y-4">
-        <p className="text-[10px] uppercase tracking-[0.28em] text-ember/76">Manual Analysis</p>
-        <h2 className="max-w-4xl font-serif text-5xl leading-[0.98] text-ink md:text-6xl">
+        <p className="eyebrow">Manual Analysis</p>
+        <h2 className="page-title">
           Compose the research run, then let the memo build itself.
         </h2>
-        <p className="max-w-3xl text-base leading-8 text-ink/68">
+        <p className="page-intro">
           Start with one clear claim, URL, or market ID. The desk will parse the proposition,
           gather sources, verify evidence, and open a live memo page while the run is still
           working.
@@ -102,34 +118,34 @@ export function ManualAnalysisForm() {
       </section>
 
       <Panel className="overflow-hidden p-0">
-        <form className="space-y-8 p-6 md:p-8" onSubmit={handleSubmit}>
-          <section className="space-y-4 border-b border-black/8 pb-6">
+        <form className="space-y-0" onSubmit={handleSubmit}>
+          <section className="space-y-5 border-b border-black/8 p-5 md:p-6">
             <div className="flex flex-wrap gap-2">
               <Badge variant="yes">Memo-first workflow</Badge>
               <Badge variant="muted">Live X intelligence available</Badge>
               <Badge variant="muted">Compact manual setup</Badge>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {[
-                ["custom_claim", "Custom claim"],
-                ["market_id", "Market ID"],
-                ["market_url", "Polymarket URL"],
-              ].map(([value, label]) => (
+            <fieldset>
+              <legend className="text-sm font-semibold text-ink">Input type</legend>
+              <div className="mt-2 grid gap-2 rounded-lg border border-black/10 bg-white/45 p-1 sm:grid-cols-3">
+                {inputModeOptions.map(({ value, label }) => (
                 <button
                   key={value}
                   type="button"
+                  aria-pressed={inputMode === value}
                   onClick={() => setInputMode(value as typeof inputMode)}
-                  className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+                  className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
                     inputMode === value
-                      ? "border-ink bg-ink text-white"
-                      : "border-black/10 bg-white/60 text-ink hover:bg-white"
+                      ? "bg-ink text-white shadow-sm"
+                      : "text-ink/62 hover:bg-white/80 hover:text-ink"
                   }`}
                 >
                   {label}
                 </button>
-              ))}
-            </div>
+                ))}
+              </div>
+            </fieldset>
 
             <label className="block">
               <span className="text-sm font-semibold text-ink">Primary input</span>
@@ -138,7 +154,7 @@ export function ManualAnalysisForm() {
                 onChange={(event) => setPrimaryValue(event.target.value)}
                 required
                 rows={inputMode === "custom_claim" ? 5 : 2}
-                className="mt-3 w-full rounded-[18px] border border-black/10 bg-[rgba(255,255,255,0.72)] px-5 py-4 text-sm text-ink outline-none transition focus:border-black/20"
+                className="field-control mt-2 min-h-28 resize-y"
                 placeholder={
                   inputMode === "custom_claim"
                     ? "Will the Fed cut rates by June?"
@@ -147,32 +163,34 @@ export function ManualAnalysisForm() {
                       : "https://polymarket.com/event/fed-cut-june-2026"
                 }
               />
-              <p className="mt-3 text-sm leading-7 text-ink/58">{helperText}</p>
+              <div className="mt-2 flex flex-col gap-1 text-sm leading-6 text-ink/58 sm:flex-row sm:items-center sm:justify-between">
+                <p>{helperText}</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink/40">{primaryValue.trim().length} chars</p>
+              </div>
             </label>
           </section>
 
-          <section className="space-y-4">
+          <section className="space-y-4 p-5 md:p-6">
             <div className="flex flex-wrap items-center gap-3">
-              <p className="text-[10px] uppercase tracking-[0.22em] text-ink/46">
+              <p className="section-label">
                 Analysis settings
               </p>
               <span className="text-sm text-ink/54">Keep this compact unless the claim needs extra framing.</span>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr_0.9fr_0.9fr]">
+            <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
               <label className="block">
                 <span className="text-sm font-semibold text-ink">Template</span>
                 <select
                   value={templateRequested}
                   onChange={(event) => setTemplateRequested(event.target.value as TemplateSelection)}
-                  className="mt-2 w-full rounded-[16px] border border-black/10 bg-white/70 px-4 py-3 text-sm text-ink outline-none"
+                  className="field-control mt-2"
                 >
-                  <option value="auto">Auto-detect</option>
-                  <option value="official_event">official_event</option>
-                  <option value="macro_policy">macro_policy</option>
-                  <option value="legal_case">legal_case</option>
-                  <option value="narrative_manual">narrative_manual</option>
-                  <option value="generic_manual">generic_manual</option>
+                  {templateOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </label>
 
@@ -181,12 +199,12 @@ export function ManualAnalysisForm() {
                 <input
                   value={deadlineText}
                   onChange={(event) => setDeadlineText(event.target.value)}
-                  className="mt-2 w-full rounded-[16px] border border-black/10 bg-white/70 px-4 py-3 text-sm text-ink outline-none"
+                  className="field-control mt-2"
                   placeholder="June 12, 2026"
                 />
               </label>
 
-              <label className="flex rounded-[16px] border border-black/10 bg-white/70 px-4 py-3">
+              <label className="flex rounded-lg border border-black/10 bg-white/75 px-4 py-3">
                 <input
                   type="checkbox"
                   aria-label="Include live X intelligence"
@@ -205,7 +223,7 @@ export function ManualAnalysisForm() {
                 </div>
               </label>
 
-              <label className="flex rounded-[16px] border border-black/10 bg-white/70 px-4 py-3">
+              <label className="flex rounded-lg border border-black/10 bg-white/75 px-4 py-3">
                 <input
                   type="checkbox"
                   checked={includePremium}
@@ -223,13 +241,13 @@ export function ManualAnalysisForm() {
           </section>
 
           {error ? (
-            <div className="rounded-[16px] border border-ember/18 bg-ember/8 px-5 py-4 text-sm leading-7 text-ember">
+            <div className="mx-5 rounded-lg border border-ember/20 bg-ember/10 px-5 py-4 text-sm leading-7 text-ember md:mx-6">
               {error}
             </div>
           ) : null}
 
-          <section className="memo-rule space-y-4 pt-6">
-            <div className="grid gap-6 lg:grid-cols-2">
+          <section className="memo-rule space-y-5 p-5 md:p-6">
+            <div className="grid gap-5 lg:grid-cols-2">
               <div>
                 <p className="text-sm font-semibold text-ink">What happens next</p>
                 <p className="mt-2 text-sm leading-7 text-ink/62">
@@ -247,15 +265,15 @@ export function ManualAnalysisForm() {
               </div>
             </div>
 
-            <div className="sticky bottom-4 flex flex-col gap-3 rounded-[18px] border border-black/10 bg-[rgba(251,248,241,0.95)] px-4 py-4 shadow-[0_12px_32px_rgba(22,17,12,0.08)] backdrop-blur-sm md:flex-row md:items-center md:justify-between">
+            <div className="sticky bottom-4 flex flex-col gap-3 rounded-lg border border-black/10 bg-white/95 px-4 py-4 shadow-panel backdrop-blur-sm md:flex-row md:items-center md:justify-between">
               <p className="text-sm leading-7 text-ink/62">
                 The composer is intentionally compact. Most of the product value should happen on
                 the live analysis page, not here.
               </p>
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className="rounded-full bg-ink px-6 py-3 text-sm font-semibold text-white transition hover:bg-ink/92 disabled:cursor-not-allowed disabled:bg-ink/45"
+                disabled={!canSubmit}
+                className="primary-action md:min-w-44"
               >
                 {isSubmitting ? "Starting analysis..." : "Run manual analysis"}
               </button>

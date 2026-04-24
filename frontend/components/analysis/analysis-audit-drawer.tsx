@@ -102,7 +102,6 @@ export function AnalysisAuditDrawer({
     return null;
   }
 
-  const passageSourceLookup = new Map(sources.map((source) => [source.id, source]));
   const documentsBySource = new Map<number, Document[]>();
   for (const document of documents) {
     const current = documentsBySource.get(document.source_id) ?? [];
@@ -136,13 +135,13 @@ export function AnalysisAuditDrawer({
         role="dialog"
         aria-modal="true"
         aria-label="How this was calculated"
-        className="absolute inset-x-0 bottom-0 top-12 overflow-y-auto border border-black/8 bg-[rgba(249,245,238,0.98)] px-5 pb-10 pt-5 shadow-[0_-12px_40px_rgba(22,17,12,0.12)] md:inset-y-0 md:left-auto md:right-0 md:top-0 md:w-[min(48rem,100vw)] md:border-l"
+        className="absolute inset-x-0 bottom-0 top-12 overflow-y-auto border border-black/8 bg-[rgba(248,250,247,0.98)] px-5 pb-10 pt-5 shadow-[0_-12px_40px_rgba(21,29,26,0.12)] md:inset-y-0 md:left-auto md:right-0 md:top-0 md:w-[min(48rem,100vw)] md:border-l"
       >
         <div className="mx-auto max-w-4xl space-y-8">
           <div className="border-b border-black/8 pb-5">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-2">
-                <p className="text-[10px] uppercase tracking-[0.22em] text-ember/78">
+                <p className="eyebrow">
                   Layered audit
                 </p>
                 <h2 className="font-serif text-3xl text-ink">How this was calculated</h2>
@@ -154,7 +153,7 @@ export function AnalysisAuditDrawer({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-ink transition hover:bg-black/5"
+                className="secondary-action"
               >
                 Close
               </button>
@@ -165,7 +164,7 @@ export function AnalysisAuditDrawer({
                   key={item.key}
                   type="button"
                   onClick={() => scrollToAuditTarget({ section: item.key })}
-                  className="rounded-full border border-black/10 bg-white/60 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-ink/62 transition hover:bg-white"
+                  className="quiet-action"
                 >
                   {item.label}
                 </button>
@@ -177,19 +176,19 @@ export function AnalysisAuditDrawer({
             <>
               <section id="audit-section-scoring" className="space-y-4">
                 <div className="border-b border-black/8 pb-3">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-ink/46">Scoring</p>
+                  <p className="section-label">Scoring</p>
                   <h3 className="mt-2 font-serif text-2xl text-ink">Rule interpretation and probability inputs</h3>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <article className="rounded-[16px] border border-black/8 bg-white/70 p-4">
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Template</p>
+                  <article className="rounded-lg border border-black/8 bg-white/75 p-4">
+                    <p className="section-label">Template</p>
                     <p className="mt-2 text-lg font-semibold text-ink">{humanize(audit.rule_interpretation.template)}</p>
                     <p className="mt-3 text-sm leading-7 text-ink/62">
                       {audit.rule_interpretation.resolution_definition ?? "No rule definition stored."}
                     </p>
                   </article>
-                  <article className="rounded-[16px] border border-black/8 bg-white/70 p-4">
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">YES / NO conditions</p>
+                  <article className="rounded-lg border border-black/8 bg-white/75 p-4">
+                    <p className="section-label">YES / NO conditions</p>
                     <p className="mt-2 text-sm leading-7 text-ink/66">
                       <span className="font-semibold text-ink">YES:</span> {audit.rule_interpretation.yes_condition}
                     </p>
@@ -197,8 +196,8 @@ export function AnalysisAuditDrawer({
                       <span className="font-semibold text-ink">NO:</span> {audit.rule_interpretation.no_condition}
                     </p>
                   </article>
-                  <article className="rounded-[16px] border border-black/8 bg-white/70 p-4">
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Evidence mix</p>
+                  <article className="rounded-lg border border-black/8 bg-white/75 p-4">
+                    <p className="section-label">Evidence mix</p>
                     <div className="mt-3 space-y-2 text-sm text-ink/64">
                       <p>Prior: {formatPercent(audit.probability?.prior_probability)}</p>
                       <p>Non-social evidence: {audit.probability ? formatSigned(audit.probability.non_social_evidence) : "Unavailable"}</p>
@@ -207,8 +206,8 @@ export function AnalysisAuditDrawer({
                       <p>Model NO complement: {formatPercent(complementProbability(audit.probability?.p_hat))}</p>
                     </div>
                   </article>
-                  <article className="rounded-[16px] border border-black/8 bg-white/70 p-4">
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Source lanes</p>
+                  <article className="rounded-lg border border-black/8 bg-white/75 p-4">
+                    <p className="section-label">Source lanes</p>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-ink/64">
                       <p>Official: {audit.source_lanes.official}</p>
                       <p>News: {audit.source_lanes.news}</p>
@@ -223,25 +222,25 @@ export function AnalysisAuditDrawer({
 
               <section id="audit-section-uncertainty" className="space-y-4">
                 <div className="border-b border-black/8 pb-3">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-ink/46">Uncertainty</p>
+                  <p className="section-label">Uncertainty</p>
                   <h3 className="mt-2 font-serif text-2xl text-ink">Why the range widened or stayed tight</h3>
                 </div>
-                <div className="rounded-[16px] border border-black/8 bg-white/70 p-4">
+                <div className="rounded-lg border border-black/8 bg-white/75 p-4">
                   <div className="grid gap-4 md:grid-cols-3">
                     <div>
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Base</p>
+                      <p className="section-label">Base</p>
                       <p className="mt-2 text-lg font-semibold text-ink">
                         {audit.uncertainty?.base_uncertainty?.toFixed(4) ?? "Unavailable"}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Total</p>
+                      <p className="section-label">Total</p>
                       <p className="mt-2 text-lg font-semibold text-ink">
                         {audit.uncertainty?.total_uncertainty?.toFixed(4) ?? "Unavailable"}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Range</p>
+                      <p className="section-label">Range</p>
                       <p className="mt-2 text-lg font-semibold text-ink">
                         {formatPercent(audit.uncertainty?.p_low)} - {formatPercent(audit.uncertainty?.p_high)}
                       </p>
@@ -267,27 +266,27 @@ export function AnalysisAuditDrawer({
 
               <section id="audit-section-recommendation" className="space-y-4">
                 <div className="border-b border-black/8 pb-3">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-ink/46">Recommendation</p>
+                  <p className="section-label">Recommendation</p>
                   <h3 className="mt-2 font-serif text-2xl text-ink">Executable prices and final label</h3>
                 </div>
-                <div className="rounded-[16px] border border-black/8 bg-white/70 p-4">
+                <div className="rounded-lg border border-black/8 bg-white/75 p-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Chosen label</p>
+                      <p className="section-label">Chosen label</p>
                       <p className="mt-2 text-lg font-semibold text-ink">{humanize(audit.recommendation_math?.chosen_label)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Confidence</p>
+                      <p className="section-label">Confidence</p>
                       <p className="mt-2 text-lg font-semibold text-ink">{humanize(audit.confidence?.final_label)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">YES / NO executable prices</p>
+                      <p className="section-label">YES / NO executable prices</p>
                       <p className="mt-2 text-sm leading-7 text-ink/62">
                         YES {audit.recommendation_math?.yes_exec_price ?? "n/a"} · NO {audit.recommendation_math?.no_exec_price ?? "n/a"}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Friction buffer</p>
+                      <p className="section-label">Friction buffer</p>
                       <p className="mt-2 text-sm leading-7 text-ink/62">
                         {audit.recommendation_math?.friction_buffer ?? "Unavailable"}
                       </p>
@@ -301,7 +300,7 @@ export function AnalysisAuditDrawer({
 
               <section id="audit-section-grounding" className="space-y-4">
                 <div className="border-b border-black/8 pb-3">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-ink/46">Source grounding</p>
+                  <p className="section-label">Source grounding</p>
                   <h3 className="mt-2 font-serif text-2xl text-ink">Ranked passages behind the memo</h3>
                 </div>
                 <div className="space-y-4">
@@ -314,7 +313,7 @@ export function AnalysisAuditDrawer({
                           right.relevance_score - left.relevance_score || left.passage_index - right.passage_index,
                       );
                       return (
-                        <article key={source.id} className="rounded-[16px] border border-black/8 bg-white/70 p-4">
+                        <article key={source.id} className="rounded-lg border border-black/8 bg-white/75 p-4">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm font-semibold text-ink">{source.title ?? source.domain ?? "Source"}</p>
                             <Badge variant="muted">{source.source_tier}</Badge>
@@ -326,10 +325,10 @@ export function AnalysisAuditDrawer({
                                 <article
                                   key={passage.id}
                                   id={`audit-passage-${passage.id}`}
-                                  className={`rounded-[14px] border px-4 py-3 ${
+                                  className={`rounded-lg border px-4 py-3 ${
                                     focus?.passageId === passage.id
-                                      ? "border-pine/30 bg-pine/8"
-                                      : "border-black/6 bg-[rgba(247,242,233,0.9)]"
+                                      ? "border-pine/30 bg-pine/10"
+                                      : "border-black/6 bg-white/70"
                                   }`}
                                 >
                                   <div className="flex flex-wrap items-center gap-2">
@@ -355,7 +354,7 @@ export function AnalysisAuditDrawer({
 
               <section id="audit-section-factors" className="space-y-4">
                 <div className="border-b border-black/8 pb-3">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-ink/46">Factor details</p>
+                  <p className="section-label">Factor details</p>
                   <h3 className="mt-2 font-serif text-2xl text-ink">Every contribution that touched the score</h3>
                 </div>
                 <div className="space-y-3">
@@ -363,10 +362,10 @@ export function AnalysisAuditDrawer({
                     <article
                       key={factor.factor_id}
                       id={`audit-factor-${factor.factor_id}`}
-                      className={`rounded-[16px] border p-4 ${
+                      className={`rounded-lg border p-4 ${
                         focus?.factorId === factor.factor_id
-                          ? "border-pine/30 bg-pine/8"
-                          : "border-black/8 bg-white/70"
+                          ? "border-pine/30 bg-pine/10"
+                          : "border-black/8 bg-white/75"
                       }`}
                     >
                       <div className="flex flex-wrap items-center gap-2">

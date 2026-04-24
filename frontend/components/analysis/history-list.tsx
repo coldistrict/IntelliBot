@@ -23,7 +23,7 @@ function AnalysisRow({ item }: { item: AnalysisSummary }) {
   return (
     <Link
       href={`/analyses/${item.id}`}
-      className="grid gap-4 border-b border-black/8 py-5 transition last:border-b-0 hover:bg-black/[0.015] md:grid-cols-[minmax(0,1fr)_13rem]"
+      className="grid gap-4 border-b border-black/8 py-4 transition last:border-b-0 hover:bg-black/[0.015] md:grid-cols-[minmax(0,1fr)_13rem]"
     >
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
@@ -31,17 +31,17 @@ function AnalysisRow({ item }: { item: AnalysisSummary }) {
           {item.template_selected ? <Badge variant="muted">{item.template_selected}</Badge> : null}
           {item.latest_confidence_label ? <Badge variant="muted">{item.latest_confidence_label}</Badge> : null}
         </div>
-        <h3 className="mt-3 font-serif text-2xl leading-tight text-ink">{item.input_text}</h3>
-        <p className="mt-2 max-w-4xl text-sm leading-7 text-ink/62">
+        <h3 className="mt-2 text-base font-semibold leading-6 text-ink">{item.input_text}</h3>
+        <p className="mt-1 max-w-4xl text-sm leading-6 text-ink/62">
           {item.display_summary ??
             item.current_stage_note ??
             "Open the run to watch the memo and inspector unlock."}
         </p>
       </div>
 
-      <div className="space-y-3 text-sm text-ink/56">
-        <p>{new Date(item.updated_at).toLocaleString()}</p>
-        <p>
+      <div className="space-y-2 text-sm text-ink/56 md:text-right">
+        <p className="font-medium text-ink/68">{new Date(item.updated_at).toLocaleString()}</p>
+        <p className="capitalize">
           {item.mode} · {item.input_type}
         </p>
         {(item.status === "queued" || item.status === "running") && item.progress_percent !== null ? (
@@ -66,6 +66,7 @@ function AnalysisRow({ item }: { item: AnalysisSummary }) {
 export function HistoryList() {
   const [items, setItems] = useState<AnalysisSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -75,6 +76,8 @@ export function HistoryList() {
         setError(null);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Unable to load analyses.");
+      } finally {
+        setHasLoaded(true);
       }
     }
 
@@ -93,55 +96,78 @@ export function HistoryList() {
     () => items.filter((item) => item.status !== "queued" && item.status !== "running"),
     [items],
   );
+  const failedCount = useMemo(() => items.filter((item) => item.status === "failed").length, [items]);
 
   if (error) {
     return (
       <Panel className="p-7">
-        <p className="text-[10px] uppercase tracking-[0.22em] text-ember/76">History</p>
+        <p className="eyebrow">History</p>
         <p className="mt-4 text-sm text-ember">{error}</p>
       </Panel>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <section className="max-w-5xl space-y-4">
-        <p className="text-[10px] uppercase tracking-[0.28em] text-ember/76">Research Log</p>
-        <h2 className="max-w-4xl font-serif text-5xl leading-[0.98] text-ink md:text-6xl">
+        <p className="eyebrow">Research Log</p>
+        <h2 className="page-title">
           Track what is still moving and what already resolved into a memo.
         </h2>
-        <p className="max-w-3xl text-base leading-8 text-ink/68">
+        <p className="page-intro">
           Running analyses stay visible with progress context, while completed runs compress into a
           denser reading log you can reopen at any time.
         </p>
       </section>
 
-      <Panel className="p-6">
-        <div className="border-b border-black/8 pb-4">
-          <p className="text-[10px] uppercase tracking-[0.22em] text-ink/46">Running</p>
-          <h3 className="mt-2 font-serif text-2xl text-ink">Analyses in motion</h3>
+      <section className="grid gap-3 sm:grid-cols-3">
+        <Panel className="p-4">
+          <p className="section-label">Total</p>
+          <p className="mt-2 text-3xl font-semibold text-ink">{items.length}</p>
+          <p className="mt-1 text-sm text-ink/58">Runs in the log</p>
+        </Panel>
+        <Panel className="p-4">
+          <p className="section-label">Running</p>
+          <p className="mt-2 text-3xl font-semibold text-ink">{running.length}</p>
+          <p className="mt-1 text-sm text-ink/58">Currently moving</p>
+        </Panel>
+        <Panel className="p-4">
+          <p className="section-label">Needs review</p>
+          <p className="mt-2 text-3xl font-semibold text-ink">{failedCount}</p>
+          <p className="mt-1 text-sm text-ink/58">Failed runs</p>
+        </Panel>
+      </section>
+
+      <Panel className="p-5">
+        <div className="border-b border-black/8 pb-3">
+          <p className="section-label">Running</p>
+          <h3 className="mt-1.5 font-serif text-2xl text-ink">Analyses in motion</h3>
         </div>
         <div>
-          {running.length ? (
+          {!hasLoaded ? (
+            <p className="py-5 text-sm leading-7 text-ink/58">Loading active analyses...</p>
+          ) : running.length ? (
             running.map((item) => <AnalysisRow key={item.id} item={item} />)
           ) : (
-            <p className="py-6 text-sm leading-7 text-ink/58">
+            <p className="py-5 text-sm leading-7 text-ink/58">
               No active analyses right now. Start one from Manual Analysis.
             </p>
           )}
         </div>
       </Panel>
 
-      <Panel className="p-6">
-        <div className="border-b border-black/8 pb-4">
-          <p className="text-[10px] uppercase tracking-[0.22em] text-ink/46">Completed</p>
-          <h3 className="mt-2 font-serif text-2xl text-ink">Finished runs</h3>
+      <Panel className="p-5">
+        <div className="border-b border-black/8 pb-3">
+          <p className="section-label">Completed</p>
+          <h3 className="mt-1.5 font-serif text-2xl text-ink">Finished runs</h3>
         </div>
         <div>
-          {completed.length ? (
+          {!hasLoaded ? (
+            <p className="py-5 text-sm leading-7 text-ink/58">Loading finished runs...</p>
+          ) : completed.length ? (
             completed.map((item) => <AnalysisRow key={item.id} item={item} />)
           ) : (
-            <p className="py-6 text-sm leading-7 text-ink/58">
+            <p className="py-5 text-sm leading-7 text-ink/58">
               Completed analyses will appear here once the desk has some history.
             </p>
           )}

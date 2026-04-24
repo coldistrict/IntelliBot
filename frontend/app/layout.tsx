@@ -24,8 +24,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${sans.variable} ${serif.variable} bg-canvas text-ink antialiased`}>
+    <html lang="en" className={`${sans.variable} ${serif.variable}`}>
+      <body className="bg-canvas text-ink antialiased">
         <SiteShell>{children}</SiteShell>
       </body>
     </html>
