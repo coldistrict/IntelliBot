@@ -9,17 +9,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        canvas: "#f4efe5",
-        ink: "#16110c",
-        ember: "#c9572f",
-        pine: "#1f5440",
-        mist: "#e7ddd0",
+        canvas: "#f6f7f3",
+        ink: "#151d1a",
+        ember: "#ad4b34",
+        pine: "#146052",
+        mist: "#dfe7e1",
       },
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       boxShadow: {
-        panel: "0 18px 50px rgba(22, 17, 12, 0.08)",
+        panel: "0 10px 28px rgba(21, 29, 26, 0.07)",
       },
     },
   },
@@ -27,4 +27,3 @@ const config: Config = {
 };
 
 export default config;
-

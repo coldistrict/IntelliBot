@@ -25,6 +25,16 @@ type AuditFocus = {
   passageId?: number | null;
 };
 
+const detailNavItems = [
+  { id: "analysis-summary", label: "Summary" },
+  { id: "analysis-memo", label: "Memo" },
+  { id: "analysis-social", label: "Social" },
+  { id: "analysis-sources", label: "Sources" },
+  { id: "analysis-status", label: "Status" },
+  { id: "analysis-market", label: "Market" },
+  { id: "analysis-rules", label: "Rules" },
+];
+
 function badgeVariant(label: string | null | undefined) {
   if (!label) {
     return "muted" as const;
@@ -78,6 +88,14 @@ function humanizeLabel(value: string | null | undefined) {
   return value.replaceAll("_", " ");
 }
 
+function sentenceCaseLabel(value: string | null | undefined) {
+  const humanized = humanizeLabel(value);
+  if (!humanized) {
+    return "Unavailable";
+  }
+  return humanized.charAt(0).toUpperCase() + humanized.slice(1);
+}
+
 function formatCount(value: number, singular: string, plural = `${singular}s`) {
   return `${value} ${value === 1 ? singular : plural}`;
 }
@@ -108,11 +126,15 @@ function sourceMetaNumber(source: Source, key: string): number | null {
   return typeof value === "number" ? value : null;
 }
 
+function scrollToDetailSection(id: string) {
+  document.getElementById(id)?.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
 function SectionPlaceholder({ title, note }: { title: string; note: string }) {
   return (
-    <article className="rounded-[16px] border border-dashed border-black/10 bg-[rgba(255,255,255,0.45)] p-5">
+    <article className="rounded-lg border border-dashed border-black/10 bg-white/55 p-4">
       <p className="text-sm font-semibold text-ink">{title}</p>
-      <p className="mt-2 text-sm leading-7 text-ink/58">{note}</p>
+      <p className="mt-2 text-sm leading-6 text-ink/58">{note}</p>
       <div className="mt-4 space-y-2 animate-pulse">
         <div className="h-2.5 w-3/4 rounded-full bg-black/7" />
         <div className="h-2.5 w-5/6 rounded-full bg-black/7" />
@@ -130,17 +152,17 @@ function MemoEvidenceItem({
   onInspect: () => void;
 }) {
   return (
-    <article className="border-b border-black/8 pb-4 last:border-b-0 last:pb-0">
+    <article className="border-b border-black/8 py-3 first:pt-0 last:border-b-0 last:pb-0">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-base font-semibold text-ink">{item.title}</p>
-          {item.note ? <p className="mt-2 text-sm leading-7 text-ink/60">{item.note}</p> : null}
+          {item.note ? <p className="mt-1 text-sm leading-6 text-ink/60">{item.note}</p> : null}
         </div>
         {item.factor_id ? (
           <button
             type="button"
             onClick={onInspect}
-            className="rounded-full border border-black/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-ink/62 transition hover:bg-black/5"
+            className="quiet-action shrink-0"
           >
             Inspect
           </button>
@@ -158,22 +180,22 @@ function SocialTimelineCard({ source }: { source: Source }) {
   const trustConfidence = sourceMetaNumber(source, "trust_confidence");
 
   return (
-    <article className="border-b border-black/8 pb-4 last:border-b-0 last:pb-0">
+    <article className="border-b border-black/8 py-4 first:pt-0 last:border-b-0 last:pb-0">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={badgeVariant(source.source_tier)}>{source.source_tier}</Badge>
         <span className="text-[10px] uppercase tracking-[0.16em] text-ink/42">
           {formatDate(source.published_at)}
         </span>
       </div>
-      <p className="mt-3 text-base font-semibold text-ink">{displayName}</p>
-      <p className="mt-2 text-sm leading-7 text-ink/66">{source.excerpt}</p>
+      <p className="mt-2 text-base font-semibold text-ink">{displayName}</p>
+      <p className="mt-1 text-sm leading-6 text-ink/66">{source.excerpt}</p>
       {trustReason ? (
-        <p className="mt-2 text-sm leading-7 text-ink/58">
+        <p className="mt-2 text-sm leading-6 text-ink/58">
           <span className="font-semibold text-ink">Why trusted:</span> {trustReason}
         </p>
       ) : null}
       {relevanceReason ? (
-        <p className="mt-2 text-sm leading-7 text-ink/58">
+        <p className="mt-2 text-sm leading-6 text-ink/58">
           <span className="font-semibold text-ink">Why relevant:</span> {relevanceReason}
         </p>
       ) : null}
@@ -181,7 +203,7 @@ function SocialTimelineCard({ source }: { source: Source }) {
         {handle ? <span>@{handle}</span> : null}
         {trustConfidence !== null ? <span>{Math.round(trustConfidence * 100)}% trust confidence</span> : null}
         {source.url ? (
-          <Link href={source.url} target="_blank" className="font-medium text-ember">
+          <Link href={source.url} target="_blank" className="font-medium text-pine">
             Open post
           </Link>
         ) : null}
@@ -197,30 +219,30 @@ function SocialConsensusSnapshot({ summary }: { summary: SocialIntelSummary }) {
   const themes = summary.key_themes ?? [];
 
   return (
-    <article className="rounded-[18px] border border-black/8 bg-[rgba(255,255,255,0.56)] p-5">
-      <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Broader X consensus</p>
+    <article className="rounded-lg border border-black/8 bg-white/65 p-4">
+      <p className="section-label">Broader X consensus</p>
       <p className="mt-3 text-xl font-semibold capitalize text-ink">
         {consensusLabel} with {consensusStrength} conviction
       </p>
-      <p className="mt-2 max-w-4xl text-sm leading-7 text-ink/60">
+      <p className="mt-2 max-w-4xl text-sm leading-6 text-ink/60">
         Broader X discussion currently reads as {consensusLabel} with {consensusStrength} conviction in an{" "}
         {narrativePhase} phase.
       </p>
-      <p className="mt-3 max-w-4xl text-sm leading-7 text-ink/66">{summary.summary}</p>
+      <p className="mt-3 max-w-4xl text-sm leading-6 text-ink/66">{summary.summary}</p>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-[14px] border border-black/8 bg-white/55 px-4 py-3">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Consensus</p>
+        <div className="border-l border-black/10 pl-3">
+          <p className="section-label">Consensus</p>
           <p className="mt-2 text-sm font-semibold capitalize text-ink">{consensusLabel}</p>
         </div>
-        <div className="rounded-[14px] border border-black/8 bg-white/55 px-4 py-3">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Posts sampled</p>
+        <div className="border-l border-black/10 pl-3">
+          <p className="section-label">Posts sampled</p>
           <p className="mt-2 text-sm font-semibold text-ink">
             {formatCount(summary.broad_posts_sampled, "post")}
           </p>
         </div>
-        <div className="rounded-[14px] border border-black/8 bg-white/55 px-4 py-3">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Trusted accounts retained</p>
+        <div className="border-l border-black/10 pl-3">
+          <p className="section-label">Trusted accounts retained</p>
           <p className="mt-2 text-sm font-semibold text-ink">
             {formatCount(summary.trusted_accounts_count, "account")}
           </p>
@@ -229,7 +251,7 @@ function SocialConsensusSnapshot({ summary }: { summary: SocialIntelSummary }) {
 
       {themes.length ? (
         <div className="mt-5 space-y-3">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Key themes</p>
+          <p className="section-label">Key themes</p>
           <div className="flex flex-wrap gap-2">
             {themes.map((theme) => (
               <Badge key={theme} variant="muted">
@@ -245,12 +267,12 @@ function SocialConsensusSnapshot({ summary }: { summary: SocialIntelSummary }) {
 
 function ArtifactRow({ artifact }: { artifact: PresentationArtifactStatus }) {
   return (
-    <article className="border-b border-black/8 pb-3 last:border-b-0 last:pb-0">
+    <article className="border-b border-black/8 py-3 first:pt-0 last:border-b-0 last:pb-0">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-semibold text-ink">{artifact.label}</p>
         <Badge variant={badgeVariant(artifact.status)}>{artifact.status}</Badge>
       </div>
-      <p className="mt-2 text-sm leading-7 text-ink/58">{artifact.note ?? "No stage note stored."}</p>
+      <p className="mt-1 text-sm leading-6 text-ink/58">{artifact.note ?? "No stage note stored."}</p>
     </article>
   );
 }
@@ -311,7 +333,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
   if (error) {
     return (
       <Panel className="p-8">
-        <p className="text-[10px] uppercase tracking-[0.22em] text-ember/76">Analysis detail</p>
+        <p className="eyebrow">Analysis detail</p>
         <p className="mt-4 text-sm leading-7 text-ember">{error}</p>
       </Panel>
     );
@@ -320,10 +342,10 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
   if (!detail) {
     return (
       <Panel className="p-8">
-        <p className="text-[10px] uppercase tracking-[0.22em] text-ember/76">Analysis detail</p>
+        <p className="eyebrow">Analysis detail</p>
         <div className="mt-5 animate-pulse space-y-4">
           <div className="h-3 w-32 rounded-full bg-black/8" />
-          <div className="h-12 w-5/6 rounded-[18px] bg-black/8" />
+          <div className="h-12 w-5/6 rounded-lg bg-black/8" />
           <div className="h-4 w-4/5 rounded-full bg-black/8" />
         </div>
       </Panel>
@@ -346,6 +368,33 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
   const contextItems = detail.presentation.brief_sections.context ?? [];
   const artifactStatuses = detail.presentation.artifact_statuses ?? [];
   const noPointEstimate = complementProbability(detail.latest_run?.p_hat);
+  const recommendationLabel =
+    detail.recommendation?.recommendation_label ??
+    detail.latest_run?.recommendation_label ??
+    detail.request.latest_recommendation_label ??
+    null;
+  const isAnalysisOnlyRecommendation = recommendationLabel === "analysis_only";
+  const recommendationHeadline = isAnalysisOnlyRecommendation
+    ? "No trade recommendation"
+    : sentenceCaseLabel(recommendationLabel ?? "pending");
+  const recommendationNote = isAnalysisOnlyRecommendation
+    ? detail.market
+      ? detail.latest_run?.numeric_estimate_available === false
+        ? "The model withheld a trade call until the evidence gets stronger."
+        : "This run stayed research-only instead of making a price-based call."
+      : "No linked Polymarket market was available for a trade call."
+    : null;
+  const probabilityTitle = hasPointEstimate ? "YES probability" : hasProbabilityRange ? "Probability range" : "Probability";
+  const probabilityValue = hasPointEstimate
+    ? formatPercent(detail.latest_run?.p_hat)
+    : hasProbabilityRange
+      ? `${formatPercent(detail.latest_run?.p_low)} - ${formatPercent(detail.latest_run?.p_high)}`
+      : "Withheld";
+  const probabilityNote =
+    !hasPointEstimate && !hasProbabilityRange && qualitativeLabel
+      ? `Qualitative read: ${humanizeLabel(qualitativeLabel)}.`
+      : null;
+  const modelNoteTitle = hasPointEstimate ? "NO probability" : hasProbabilityRange ? "Range note" : "Why withheld";
   const openAudit = (focus?: AuditFocus) => {
     refreshDetail();
     setAuditFocus(focus ?? null);
@@ -353,7 +402,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
   };
 
   return (
-    <div className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_22rem]">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
       <AnalysisAuditDrawer
         audit={detail.audit ?? null}
         documents={detail.documents ?? []}
@@ -364,8 +413,8 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
         focus={auditFocus}
       />
 
-      <div className="space-y-8">
-        <section className="border-b border-black/8 pb-6">
+      <div className="space-y-6">
+        <section id="analysis-summary" className="scroll-mt-24 border-b border-black/8 pb-5">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={badgeVariant(detail.request.status)}>{detail.request.status}</Badge>
             {detail.request.template_selected ? <Badge variant="muted">{detail.request.template_selected}</Badge> : null}
@@ -378,64 +427,74 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
               </Badge>
             ) : null}
           </div>
-          <h1 className="mt-5 max-w-5xl font-serif text-5xl leading-[0.98] text-ink md:text-6xl">
+          <h1 className="mt-4 max-w-5xl font-serif text-3xl leading-[1.06] text-ink sm:text-4xl">
             {detail.presentation.headline}
           </h1>
-          <p className="mt-4 max-w-4xl text-lg leading-8 text-ink/72">{detail.presentation.thesis}</p>
-          <p className="mt-3 max-w-4xl text-sm leading-7 text-ink/58">{detail.presentation.status_note}</p>
-          <div className="mt-5 flex flex-wrap gap-4 text-sm text-ink/54">
+          <p className="mt-3 max-w-4xl text-base leading-7 text-ink/72">{detail.presentation.thesis}</p>
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-ink/58">{detail.presentation.status_note}</p>
+          <div className="mt-4 flex flex-wrap gap-4 text-sm text-ink/54">
             <span>Last updated {formatDate(lastUpdated)}</span>
             <span>Elapsed {formatElapsed(detail.request.started_at, detail.request.completed_at)}</span>
             {detail.progress.current_label ? <span>Current stage: {detail.progress.current_label}</span> : null}
           </div>
+          {isRunning || isFailed ? (
+            <div className="mt-4 max-w-4xl">
+              <div className="mb-2 flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink/46">
+                <span>{isFailed ? "Stopped" : detail.progress.current_label ?? "Running"}</span>
+                <span>{detail.progress.percent_complete}%</span>
+              </div>
+              <div className="h-2 rounded-full bg-black/6">
+                <div
+                  className={`h-2 rounded-full transition-all ${isFailed ? "bg-ember" : "bg-pine"}`}
+                  style={{ width: `${Math.max(8, detail.progress.percent_complete)}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
         </section>
 
-        <section className="grid gap-4 md:grid-cols-4">
-          <Panel className="p-5">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Recommendation</p>
-            <p className="mt-3 text-lg font-semibold capitalize text-ink">
-              {humanizeLabel(detail.recommendation?.recommendation_label ?? "pending")}
+        <section className="grid gap-3 md:grid-cols-4">
+          <Panel className="p-4">
+            <p className="section-label">Recommendation</p>
+            <p className="mt-3 text-lg font-semibold text-ink">
+              {recommendationHeadline}
             </p>
+            {recommendationNote ? <p className="mt-2 text-sm leading-6 text-ink/62">{recommendationNote}</p> : null}
           </Panel>
-          <Panel className="p-5">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Confidence</p>
+          <Panel className="p-4">
+            <p className="section-label">Confidence</p>
             <p className="mt-3 text-lg font-semibold capitalize text-ink">
               {humanizeLabel(detail.latest_run?.confidence_label ?? "pending")}
             </p>
           </Panel>
-          <Panel className="p-5">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">
-              {hasPointEstimate ? "YES probability" : hasProbabilityRange ? "Probability view" : "Qualitative view"}
-            </p>
-            <p className="mt-3 text-lg font-semibold text-ink">
-              {hasPointEstimate
-                ? formatPercent(detail.latest_run?.p_hat)
-                : hasProbabilityRange
-                  ? `${formatPercent(detail.latest_run?.p_low)} - ${formatPercent(detail.latest_run?.p_high)}`
-                  : humanizeLabel(qualitativeLabel)}
-            </p>
+          <Panel className="p-4">
+            <p className="section-label">{probabilityTitle}</p>
+            <p className="mt-3 text-lg font-semibold text-ink">{probabilityValue}</p>
+            {probabilityNote ? <p className="mt-2 text-sm leading-6 text-ink/62">{probabilityNote}</p> : null}
           </Panel>
-          <Panel className="p-5">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">
-              {hasPointEstimate ? "NO probability" : "Model note"}
-            </p>
+          <Panel className="p-4">
+            <p className="section-label">{modelNoteTitle}</p>
             {hasPointEstimate ? (
               <p className="mt-3 text-lg font-semibold text-ink">{formatPercent(noPointEstimate)}</p>
+            ) : hasProbabilityRange ? (
+              <p className="mt-3 text-sm leading-6 text-ink/62">
+                This run produced a probability band without a single-point estimate.
+              </p>
             ) : (
-              <p className="mt-3 text-sm leading-7 text-ink/62">
+              <p className="mt-3 text-sm leading-6 text-ink/62">
                 {detail.latest_run?.numeric_estimate_reason ?? "This run stayed qualitative-only."}
               </p>
             )}
           </Panel>
         </section>
 
-        <Panel className="space-y-6 p-6">
-          <div className="border-b border-black/8 pb-4">
-            <p className="text-[10px] uppercase tracking-[0.22em] text-ink/46">Working memo</p>
-            <h2 className="mt-2 font-serif text-3xl text-ink">What this means</h2>
+        <Panel id="analysis-memo" className="scroll-mt-24 space-y-5 p-5">
+          <div className="border-b border-black/8 pb-3">
+            <p className="section-label">Working memo</p>
+            <h2 className="mt-1.5 font-serif text-3xl text-ink">What this means</h2>
           </div>
           {artifactStatusMap.get("brief_generation")?.available || !isRunning ? (
-            <p className="max-w-4xl text-base leading-8 text-ink/70">
+            <p className="max-w-4xl text-base leading-7 text-ink/70">
               {detail.presentation.brief_sections.what_it_means}
             </p>
           ) : (
@@ -445,7 +504,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
             />
           )}
 
-          <div className="grid gap-8 lg:grid-cols-2">
+          <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="font-serif text-2xl text-ink">Why yes</h3>
@@ -497,10 +556,10 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
             </div>
           </div>
 
-          <div className="memo-rule space-y-4 pt-6">
+          <div className="memo-rule space-y-4 pt-5">
             <h3 className="font-serif text-2xl text-ink">Context / not scored</h3>
             {contextItems.length ? (
-              <div className="space-y-4">
+              <div>
                 {contextItems.map((item) => (
                   <MemoEvidenceItem
                     key={`context-${item.factor_id ?? item.title}`}
@@ -521,18 +580,18 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
             )}
           </div>
 
-          <div className="memo-rule space-y-4 pt-6">
+          <div className="memo-rule space-y-3 pt-5">
             <h3 className="font-serif text-2xl text-ink">Why this could be wrong</h3>
-            <p className="max-w-4xl text-sm leading-8 text-ink/66">
+            <p className="max-w-4xl text-sm leading-7 text-ink/66">
               {detail.presentation.brief_sections.caveats}
             </p>
           </div>
         </Panel>
 
-        <Panel className="space-y-6 p-6">
-          <div className="border-b border-black/8 pb-4">
-            <p className="text-[10px] uppercase tracking-[0.22em] text-ink/46">Social intelligence</p>
-            <h2 className="mt-2 font-serif text-3xl text-ink">Trusted accounts and narrative context</h2>
+        <Panel id="analysis-social" className="scroll-mt-24 space-y-5 p-5">
+          <div className="border-b border-black/8 pb-3">
+            <p className="section-label">Social intelligence</p>
+            <h2 className="mt-1.5 font-serif text-3xl text-ink">Trusted accounts and narrative context</h2>
           </div>
           {detail.social_intel_summary ? (
             <div className="space-y-5">
@@ -549,7 +608,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
               </div>
               <SocialConsensusSnapshot summary={detail.social_intel_summary} />
               {trustedSocialSources.length ? (
-                <div className="space-y-4">
+                <div>
                   {trustedSocialSources.map((source) => (
                     <SocialTimelineCard key={source.id} source={source} />
                   ))}
@@ -572,50 +631,50 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
           )}
         </Panel>
 
-        <Panel className="space-y-6 p-6">
-          <div className="border-b border-black/8 pb-4">
-            <p className="text-[10px] uppercase tracking-[0.22em] text-ink/46">Sources</p>
-            <h2 className="mt-2 font-serif text-3xl text-ink">Source material and grounded passages</h2>
+        <Panel id="analysis-sources" className="scroll-mt-24 space-y-5 p-5">
+          <div className="border-b border-black/8 pb-3">
+            <p className="section-label">Sources</p>
+            <h2 className="mt-1.5 font-serif text-3xl text-ink">Source material and grounded passages</h2>
           </div>
 
           {nonSocialSources.length ? (
-            <div className="space-y-6">
+            <div>
               {nonSocialSources.map((source) => {
                 const grounding = documentsBySource.get(source.id);
                 const passages = passagesBySource.get(source.id) ?? [];
                 return (
-                  <article key={source.id} className="border-b border-black/8 pb-6 last:border-b-0 last:pb-0">
+                  <article key={source.id} className="border-b border-black/8 py-5 first:pt-0 last:border-b-0 last:pb-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="muted">{source.source_kind}</Badge>
                       <Badge variant="muted">{source.source_tier}</Badge>
                       {grounding?.extractor ? <Badge variant="muted">{grounding.extractor}</Badge> : null}
                     </div>
                     <p className="mt-3 text-lg font-semibold text-ink">{source.title ?? source.domain ?? "Untitled source"}</p>
-                    <p className="mt-2 text-sm leading-7 text-ink/66">{source.excerpt}</p>
+                    <p className="mt-1 text-sm leading-6 text-ink/66">{source.excerpt}</p>
 
                     {passages.length ? (
                       <div className="mt-4 space-y-3">
                         <div className="flex items-center justify-between gap-4">
-                          <p className="text-[10px] uppercase tracking-[0.16em] text-ink/46">
+                          <p className="section-label">
                             Ranked grounding passages
                           </p>
                           <button
                             type="button"
                             onClick={() => openAudit({ section: "grounding", passageId: passages[0].id })}
-                            className="rounded-full border border-black/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-ink/62 transition hover:bg-black/5"
+                            className="quiet-action"
                           >
                             Inspect grounding
                           </button>
                         </div>
                         {passages.slice(0, 2).map((passage) => (
-                          <article key={passage.id} className="rounded-[14px] border border-black/8 bg-[rgba(255,255,255,0.56)] px-4 py-3">
+                          <article key={passage.id} className="rounded-lg border border-black/8 bg-white/65 px-4 py-3">
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge variant="muted">passage {passage.passage_index}</Badge>
                               <span className="text-[10px] uppercase tracking-[0.16em] text-ink/42">
                                 relevance {passage.relevance_score.toFixed(2)}
                               </span>
                             </div>
-                            <p className="mt-3 text-sm leading-7 text-ink/64">{passage.text}</p>
+                            <p className="mt-3 text-sm leading-6 text-ink/64">{passage.text}</p>
                           </article>
                         ))}
                       </div>
@@ -624,7 +683,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
                     <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-ink/54">
                       {grounding ? <span>{grounding.wordCount} words grounded</span> : null}
                       {source.url ? (
-                        <Link href={source.url} target="_blank" className="font-medium text-ember">
+                        <Link href={source.url} target="_blank" className="font-medium text-pine">
                           Open source
                         </Link>
                       ) : null}
@@ -645,11 +704,11 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
         </Panel>
       </div>
 
-      <aside className="space-y-6 xl:sticky xl:top-24 xl:self-start">
-        <Panel className="space-y-4 p-5">
-          <div className="border-b border-black/8 pb-4">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Actions</p>
-            <p className="mt-2 text-sm leading-7 text-ink/58">
+      <aside className="space-y-5 xl:sticky xl:top-24 xl:self-start">
+        <Panel className="space-y-4 p-4">
+          <div className="border-b border-black/8 pb-3">
+            <p className="section-label">Actions</p>
+            <p className="mt-2 text-sm leading-6 text-ink/58">
               Open the inspector, rerun the desk, or return to the research log.
             </p>
           </div>
@@ -658,7 +717,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
               type="button"
               onClick={() => openAudit({ section: "scoring" })}
               disabled={!detail.audit}
-              className="w-full rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink/92 disabled:cursor-not-allowed disabled:bg-ink/45"
+              className="primary-action w-full"
             >
               How this was calculated
             </button>
@@ -666,24 +725,45 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
               type="button"
               onClick={handleRerun}
               disabled={isRerunning}
-              className="w-full rounded-full border border-black/10 bg-white/70 px-5 py-3 text-sm font-semibold text-ink transition hover:bg-white disabled:cursor-not-allowed disabled:text-ink/45"
+              className="secondary-action w-full"
             >
               {isRerunning ? "Rerunning..." : "Rerun analysis"}
             </button>
             <Link
               href="/history"
-              className="block rounded-full border border-black/10 bg-white/70 px-5 py-3 text-center text-sm font-semibold text-ink transition hover:bg-white"
+              className="secondary-action w-full"
             >
               Back to research log
             </Link>
           </div>
         </Panel>
 
-        <Panel className="space-y-4 p-5">
-          <div className="border-b border-black/8 pb-4">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Run status</p>
+        <Panel className="space-y-4 p-4">
+          <div className="border-b border-black/8 pb-3">
+            <p className="section-label">Jump to</p>
+            <p className="mt-2 text-sm leading-6 text-ink/58">
+              Move between the main read, evidence, and run metadata.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {detailNavItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => scrollToDetailSection(item.id)}
+                className="quiet-action justify-center"
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </Panel>
+
+        <Panel id="analysis-status" className="scroll-mt-24 space-y-4 p-4">
+          <div className="border-b border-black/8 pb-3">
+            <p className="section-label">Run status</p>
             <p className="mt-2 text-2xl font-semibold text-ink">{detail.progress.percent_complete}%</p>
-            <p className="mt-2 text-sm leading-7 text-ink/58">
+            <p className="mt-2 text-sm leading-6 text-ink/58">
               {isFailed
                 ? detail.request.error_message ?? "The run stopped before completion."
                 : detail.progress.current_note ?? "Waiting for the next stage."}
@@ -704,9 +784,9 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
           </div>
         </Panel>
 
-        <Panel className="space-y-4 p-5">
-          <div className="border-b border-black/8 pb-4">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Market context</p>
+        <Panel id="analysis-market" className="scroll-mt-24 space-y-4 p-4">
+          <div className="border-b border-black/8 pb-3">
+            <p className="section-label">Market context</p>
             <h3 className="mt-2 text-lg font-semibold text-ink">
               {detail.market?.title ?? "Analysis-only run"}
             </h3>
@@ -723,9 +803,9 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
           </div>
         </Panel>
 
-        <Panel className="space-y-4 p-5">
-          <div className="border-b border-black/8 pb-4">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-ink/42">Rule parse</p>
+        <Panel id="analysis-rules" className="scroll-mt-24 space-y-4 p-4">
+          <div className="border-b border-black/8 pb-3">
+            <p className="section-label">Rule parse</p>
             <h3 className="mt-2 text-lg font-semibold text-ink">
               {detail.latest_rule_parse?.template_detected ?? "Pending"}
             </h3>

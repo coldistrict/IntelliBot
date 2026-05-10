@@ -30,6 +30,24 @@ function analysisBadge(summary: AnalysisSummary) {
   return "warning" as const;
 }
 
+function statusCopy(summary: AnalysisSummary) {
+  return summary.current_stage_note ?? summary.display_summary ?? "Waiting for the next artifact.";
+}
+
+function CompactRunRow({ item }: { item: AnalysisSummary }) {
+  return (
+    <Link href={`/analyses/${item.id}`} className="surface-row block transition hover:bg-black/[0.015]">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={analysisBadge(item)}>{item.status}</Badge>
+        {item.template_selected ? <Badge variant="muted">{item.template_selected}</Badge> : null}
+        {item.latest_confidence_label ? <Badge variant="muted">{item.latest_confidence_label}</Badge> : null}
+      </div>
+      <h4 className="mt-2 line-clamp-2 text-base font-semibold leading-6 text-ink">{item.input_text}</h4>
+      <p className="mt-1 line-clamp-2 text-sm leading-6 text-ink/62">{statusCopy(item)}</p>
+    </Link>
+  );
+}
+
 export function DeskLaunchpad() {
   const [items, setItems] = useState<AnalysisSummary[]>([]);
   const [status, setStatus] = useState<ProviderStatus | null>(null);
@@ -59,50 +77,76 @@ export function DeskLaunchpad() {
     () => items.filter((item) => item.status === "complete" || item.status === "failed").slice(0, 4),
     [items],
   );
+  const rows = providerRows(status);
+  const readyCount = rows.filter(([, ready]) => ready).length;
+  const coreReady = rows.length >= 3 && rows.slice(0, 3).every(([, ready]) => ready);
 
   return (
-    <div className="space-y-10">
-      <section className="grid gap-10 xl:grid-cols-[minmax(0,1.1fr)_24rem]">
-        <div className="max-w-5xl space-y-5">
-          <p className="text-[10px] uppercase tracking-[0.28em] text-ember/76">
-            Desk Launchpad
-          </p>
-          <h2 className="max-w-4xl font-serif text-5xl leading-[0.98] text-ink md:text-6xl">
-            Read one market deeply, then inspect exactly how the memo got there.
-          </h2>
-          <p className="max-w-3xl text-base leading-8 text-ink/68">
-            Manual analyses stay the center of the product. Start a claim, follow the live run,
-            then open the memo and layered inspector once the evidence is ready.
-          </p>
-          <div className="flex flex-wrap items-center gap-3 pt-2">
+    <div className="space-y-6">
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="space-y-5">
+          <div className="max-w-5xl space-y-4">
+            <p className="eyebrow">Desk Launchpad</p>
+            <h2 className="page-title">
+              Read one market deeply, then inspect exactly how the memo got there.
+            </h2>
+            <p className="page-intro">
+              Manual analyses stay the center of the product. Start a claim, follow the live run,
+              then open the memo and layered inspector once the evidence is ready.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
             <Link
               href="/manual"
-              className="rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink/92"
+              className="primary-action w-full sm:w-auto"
             >
               Start a manual analysis
             </Link>
             <Link
               href="/history"
-              className="rounded-full border border-black/10 bg-white/60 px-5 py-3 text-sm font-semibold text-ink transition hover:bg-white"
+              className="secondary-action w-full sm:w-auto"
             >
               Open research log
             </Link>
           </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Panel className="p-4">
+              <p className="section-label">Active</p>
+              <p className="mt-2 text-3xl font-semibold text-ink">{running.length}</p>
+              <p className="mt-1 text-sm text-ink/58">Queued or running</p>
+            </Panel>
+            <Panel className="p-4">
+              <p className="section-label">Recent</p>
+              <p className="mt-2 text-3xl font-semibold text-ink">{recent.length}</p>
+              <p className="mt-1 text-sm text-ink/58">Finished memos shown</p>
+            </Panel>
+            <Panel className="p-4">
+              <p className="section-label">Core path</p>
+              <p className="mt-2 text-3xl font-semibold text-ink">
+                {status ? (coreReady ? "Ready" : "Setup") : "Check"}
+              </p>
+              <p className="mt-1 text-sm text-ink/58">
+                {status ? `${readyCount}/${rows.length} providers available` : "Checking providers"}
+              </p>
+            </Panel>
+          </div>
         </div>
 
-        <Panel className="space-y-4 p-6">
-          <div className="border-b border-black/8 pb-4">
-            <p className="text-[10px] uppercase tracking-[0.22em] text-ink/46">Readiness</p>
-            <h3 className="mt-2 font-serif text-2xl text-ink">Providers at a glance</h3>
+        <Panel className="space-y-4 p-5">
+          <div className="border-b border-black/8 pb-3">
+            <p className="section-label">Readiness</p>
+            <h3 className="mt-1.5 font-serif text-2xl text-ink">Providers</h3>
           </div>
-          <div className="space-y-3">
-            {providerRows(status).length ? (
-              providerRows(status).map(([label, ready]) => (
-                <div key={label} className="flex items-center justify-between gap-4 border-b border-black/6 pb-3 last:border-b-0 last:pb-0">
+          <div>
+            {rows.length ? (
+              rows.map(([label, ready]) => (
+                <div key={label} className="surface-row flex items-center justify-between gap-4">
                   <div>
                     <p className="text-sm font-semibold text-ink">{label}</p>
-                    <p className="text-sm text-ink/58">
-                      {ready ? "Configured and available." : "Missing or not configured yet."}
+                    <p className="mt-0.5 text-sm text-ink/58">
+                      {ready ? "Configured" : "Needs setup"}
                     </p>
                   </div>
                   <Badge variant={ready ? "yes" : "warning"}>{ready ? "ready" : "missing"}</Badge>
@@ -115,72 +159,47 @@ export function DeskLaunchpad() {
         </Panel>
       </section>
 
-      <section className="grid gap-8 xl:grid-cols-[1.05fr_0.95fr]">
-        <Panel className="space-y-5 p-6">
-          <div className="flex items-center justify-between gap-4 border-b border-black/8 pb-4">
+      <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <Panel className="space-y-4 p-5">
+          <div className="flex items-center justify-between gap-4 border-b border-black/8 pb-3">
             <div>
-              <p className="text-[10px] uppercase tracking-[0.22em] text-ink/46">Active</p>
-              <h3 className="mt-2 font-serif text-2xl text-ink">Runs in motion</h3>
+              <p className="section-label">Active</p>
+              <h3 className="mt-1.5 font-serif text-2xl text-ink">Runs in motion</h3>
             </div>
-            <Link href="/history" className="text-sm font-semibold text-ember">
+            <Link href="/history" className="text-sm font-semibold text-pine">
               View all
             </Link>
           </div>
-          <div className="space-y-4">
+          <div>
             {running.length ? (
-              running.map((item) => (
-                <Link
-                  key={item.id}
-                  href={`/analyses/${item.id}`}
-                  className="block border-b border-black/6 pb-4 last:border-b-0 last:pb-0"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={analysisBadge(item)}>{item.status}</Badge>
-                    {item.template_selected ? <Badge variant="muted">{item.template_selected}</Badge> : null}
-                  </div>
-                  <h4 className="mt-3 text-lg font-semibold text-ink">{item.input_text}</h4>
-                  <p className="mt-2 text-sm leading-7 text-ink/62">
-                    {item.current_stage_note ?? item.display_summary ?? "Waiting for the next artifact."}
-                  </p>
-                </Link>
-              ))
+              running.map((item) => <CompactRunRow key={item.id} item={item} />)
             ) : (
-              <p className="text-sm leading-7 text-ink/58">
-                No active analyses right now. Start one from Manual Analysis.
-              </p>
+              <div className="py-5">
+                <p className="text-sm leading-7 text-ink/58">
+                  No active analyses right now. Start one from Manual Analysis.
+                </p>
+                <Link href="/manual" className="mt-3 secondary-action">
+                  Start a run
+                </Link>
+              </div>
             )}
           </div>
         </Panel>
 
-        <Panel className="space-y-5 p-6">
-          <div className="border-b border-black/8 pb-4">
-            <p className="text-[10px] uppercase tracking-[0.22em] text-ink/46">Recent</p>
-            <h3 className="mt-2 font-serif text-2xl text-ink">Latest completed memos</h3>
+        <Panel className="space-y-4 p-5">
+          <div className="border-b border-black/8 pb-3">
+            <p className="section-label">Recent</p>
+            <h3 className="mt-1.5 font-serif text-2xl text-ink">Latest completed memos</h3>
           </div>
-          <div className="space-y-4">
+          <div>
             {recent.length ? (
-              recent.map((item) => (
-                <Link
-                  key={item.id}
-                  href={`/analyses/${item.id}`}
-                  className="block border-b border-black/6 pb-4 last:border-b-0 last:pb-0"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={analysisBadge(item)}>{item.status}</Badge>
-                    {item.latest_confidence_label ? (
-                      <Badge variant="muted">{item.latest_confidence_label}</Badge>
-                    ) : null}
-                  </div>
-                  <h4 className="mt-3 text-lg font-semibold text-ink">{item.input_text}</h4>
-                  <p className="mt-2 text-sm leading-7 text-ink/62">
-                    {item.display_summary ?? "Open the memo for the full read."}
-                  </p>
-                </Link>
-              ))
+              recent.map((item) => <CompactRunRow key={item.id} item={item} />)
             ) : (
-              <p className="text-sm leading-7 text-ink/58">
-                Completed analyses will show up here once you start using the desk.
-              </p>
+              <div className="py-5">
+                <p className="text-sm leading-7 text-ink/58">
+                  Completed analyses will show up here once you start using the desk.
+                </p>
+              </div>
             )}
           </div>
         </Panel>

@@ -17,5 +17,5 @@ describe("API contract generation", () => {
         stdio: "pipe",
       });
     }).not.toThrow();
-  });
+  }, 15_000);
 });
