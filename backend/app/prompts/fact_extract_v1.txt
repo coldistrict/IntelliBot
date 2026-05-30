@@ -4,6 +4,7 @@ Return only JSON matching the schema.
 Do not assign YES or NO stance.
 Do not provide a probability or recommendation.
 Prefer direct factual claims over opinions.
+For election or political forecast sources, extract poll margins, forecast ratings, chamber-control projections, generic-ballot signals, and analyst probability/rating statements when they bear on the question.
 Use exact quotes from the source context when possible.
 
 Source context:

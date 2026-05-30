@@ -14,16 +14,51 @@ function mergeProgressIntoDetail(
   detail: AnalysisDetail,
   progressPayload: AnalysisProgressPayload,
 ): AnalysisDetail {
+  const auditArtifact = progressPayload.presentation.artifact_statuses?.find(
+    (artifact) => artifact.key === "audit",
+  );
   return {
     ...detail,
     request: progressPayload.request,
     progress: progressPayload.progress,
+    audit: auditArtifact && !auditArtifact.available ? null : detail.audit,
     presentation: {
       ...detail.presentation,
       artifact_statuses: progressPayload.presentation.artifact_statuses ?? [],
     },
     last_updated_at: progressPayload.last_updated_at ?? null,
   };
+}
+
+function artifactAvailable(progressPayload: AnalysisProgressPayload, key: string) {
+  return (progressPayload.presentation.artifact_statuses ?? []).some(
+    (artifact) => artifact.key === key && artifact.available,
+  );
+}
+
+function shouldRefreshDetailForUnlockedArtifacts(
+  detail: AnalysisDetail,
+  progressPayload: AnalysisProgressPayload,
+) {
+  if (artifactAvailable(progressPayload, "rule_parse") && !detail.latest_rule_parse) {
+    return true;
+  }
+  if (artifactAvailable(progressPayload, "retrieval") && (detail.sources ?? []).length === 0) {
+    return true;
+  }
+  if (artifactAvailable(progressPayload, "social_intelligence") && !detail.social_intel_summary) {
+    return true;
+  }
+  if (artifactAvailable(progressPayload, "factor_mapping") && (detail.factors ?? []).length === 0) {
+    return true;
+  }
+  if (artifactAvailable(progressPayload, "brief_generation") && !detail.latest_run?.final_summary) {
+    return true;
+  }
+  if (artifactAvailable(progressPayload, "audit") && !detail.audit) {
+    return true;
+  }
+  return false;
 }
 
 export function useAnalysisDetail(analysisId: string) {
@@ -62,10 +97,18 @@ export function useAnalysisDetail(analysisId: string) {
         return;
       }
 
+      const needsDetailRefresh = detail
+        ? shouldRefreshDetailForUnlockedArtifacts(detail, payload)
+        : false;
+
       setDetail((current) => (current ? mergeProgressIntoDetail(current, payload) : current));
       setError(null);
 
-      if (payload.request.status === "complete" || payload.request.status === "failed") {
+      if (
+        payload.request.status === "complete" ||
+        payload.request.status === "failed" ||
+        needsDetailRefresh
+      ) {
         await loadDetail();
       }
     } catch (loadError) {
@@ -74,7 +117,7 @@ export function useAnalysisDetail(analysisId: string) {
       }
       setError(loadError instanceof Error ? loadError.message : "Unable to refresh analysis progress.");
     }
-  }, [analysisId, loadDetail]);
+  }, [analysisId, detail, loadDetail]);
 
   useEffect(() => {
     void loadDetail();

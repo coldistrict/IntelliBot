@@ -51,6 +51,57 @@ summary::-webkit-details-marker {
   display: none;
 }
 
+@layer components {
+  .eyebrow {
+    @apply text-[10px] font-semibold uppercase tracking-[0.28em] text-ember;
+    color: rgba(201, 87, 47, 0.76);
+  }
+
+  .page-title {
+    @apply max-w-4xl font-serif text-4xl leading-tight text-ink sm:text-5xl;
+  }
+
+  .page-intro {
+    @apply max-w-3xl text-base leading-8 text-ink;
+    color: rgba(22, 17, 12, 0.64);
+  }
+
+  .section-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.18em] text-ink;
+    color: rgba(22, 17, 12, 0.48);
+  }
+
+  .field-control {
+    @apply w-full rounded-lg border border-black/10 bg-white/75 px-3 py-2 text-sm text-ink outline-none transition;
+  }
+
+  .field-control::placeholder {
+    color: rgba(22, 17, 12, 0.34);
+  }
+
+  .field-control:focus {
+    border-color: rgba(31, 84, 64, 0.5);
+    box-shadow: 0 0 0 2px rgba(31, 84, 64, 0.15);
+  }
+
+  .primary-action {
+    @apply inline-flex items-center justify-center rounded-lg bg-ink px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-pine disabled:cursor-not-allowed disabled:bg-black/30;
+  }
+
+  .secondary-action {
+    @apply inline-flex items-center justify-center rounded-lg border border-black/10 bg-white/70 px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-white;
+  }
+
+  .quiet-action {
+    @apply inline-flex items-center rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-sm font-semibold text-ink transition hover:bg-white hover:text-ink;
+    color: rgba(22, 17, 12, 0.7);
+  }
+
+  .quiet-action:hover {
+    color: #16110c;
+  }
+}
+
 ::selection {
   background: rgba(20, 96, 82, 0.18);
   color: #151d1a;

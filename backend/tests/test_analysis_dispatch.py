@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from threading import Event
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -60,3 +61,28 @@ def test_reconcile_stale_requests_requeues_running_and_queued_work(
     assert running is not None and running.status == RequestStatusEnum.QUEUED
     assert running.current_stage == "queued"
     assert running.started_at is None
+
+
+def test_dispatch_skips_duplicate_active_request():
+    started = Event()
+    release = Event()
+    finished = Event()
+    processed_ids: list[int] = []
+
+    class StubProcessor:
+        def process_request(self, request_id: int) -> None:
+            processed_ids.append(request_id)
+            started.set()
+            release.wait(timeout=1.0)
+            finished.set()
+
+    processor = StubProcessor()
+    dispatcher = AnalysisDispatcher()
+
+    assert dispatcher.dispatch(processor, 7) is True
+    assert started.wait(timeout=1.0) is True
+    assert dispatcher.dispatch(processor, 7) is False
+
+    release.set()
+    assert finished.wait(timeout=1.0) is True
+    assert processed_ids == [7]

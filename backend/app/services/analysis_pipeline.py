@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from collections import Counter
 from dataclasses import dataclass, field
@@ -55,6 +56,7 @@ from app.models.enums import (
 )
 from app.services.pipeline_models import (
     BriefDraft,
+    EvidenceAdjudicationDraft,
     EvidenceRoleDraft,
     ExtractedFactDraft,
     FactorMappingDraft,
@@ -73,6 +75,7 @@ from app.services.analysis_scoring import (
     TEMPLATE_MULTIPLIERS,
     VERIFICATION_MULTIPLIERS,
     capped_evidence_score,
+    crowd_signal_modifier,
     factor_used_in_scoring,
     has_contradictory_factors,
     logit,
@@ -80,6 +83,7 @@ from app.services.analysis_scoring import (
     social_uncertainty_adjustment,
     source_is_factor_eligible,
 )
+from app.services.analysis_social_trust import social_post_is_trusted
 from app.services.analysis_stage_briefing import run_briefing_stage
 from app.services.analysis_stage_fact_pipeline import run_fact_pipeline_stage
 from app.services.analysis_stage_retrieval_grounding import run_retrieval_grounding_stage
@@ -95,6 +99,8 @@ from app.services.analysis_progress import (
 )
 from app.services.prompt_loader import load_prompt
 
+logger = logging.getLogger(__name__)
+
 POSITIVE_KEYWORDS = {
     "approve",
     "approved",
@@ -106,6 +112,12 @@ POSITIVE_KEYWORDS = {
     "cut",
     "lowered",
     "launched",
+    "restart",
+    "restarted",
+    "resume",
+    "resumed",
+    "reignite",
+    "reignited",
     "scheduled",
     "wins",
     "won",
@@ -173,6 +185,15 @@ LOW_SIGNAL_PHRASES = {
     "board of governors of the federal reserve system",
 }
 
+SOCIAL_WEB_DOMAINS = {
+    "facebook.com",
+    "instagram.com",
+    "tiktok.com",
+    "x.com",
+    "twitter.com",
+    "youtube.com",
+}
+
 TIMING_KEYWORDS = {
     "expected by",
     "by the end of",
@@ -209,8 +230,16 @@ PROCEDURAL_KEYWORDS = {
 LEGAL_MERITS_YES = {
     "unconstitutional",
     "likely to side against",
+    "appears likely to side against",
+    "appeared likely to side against",
     "likely to strike down",
+    "likely striking down",
+    "rule against trump",
+    "ruled against trump",
+    "side against trump",
     "appeared skeptical",
+    "appears skeptical",
+    "skeptical of constitutionality",
     "skeptical of the eo",
     "skeptical of the order",
     "contradicts the fourteenth amendment",
@@ -233,6 +262,7 @@ LEGAL_MERITS_YES = {
     "blocked the executive order",
     "blocked the order",
     "violates the constitution",
+    "violates the fourteenth amendment",
     "conflicts with the constitution",
     "court sided with anthropic",
 }
@@ -347,6 +377,8 @@ NEGATIVE_KEYWORDS = {
     "delayed",
     "denied",
     "held",
+    "holds",
+    "holding",
     "hold",
     "rejected",
     "unlikely",
@@ -356,6 +388,199 @@ NEGATIVE_KEYWORDS = {
     "won't",
     "will not",
     "no cut",
+}
+
+GENERIC_MANUAL_SPECULATIVE_CUES = {
+    "at a moment's notice",
+    "could",
+    "depends on",
+    "depending on",
+    "if ",
+    "likely to",
+    "may",
+    "might",
+    "one possibility",
+    "possible scenario",
+    "ready to",
+    "scenario",
+    "threatened",
+    "would",
+}
+
+GENERIC_MANUAL_CONTEXT_CUES = {
+    "ceasefire",
+    "cease fire",
+    "combat",
+    "conflict",
+    "fighting",
+    "hostilities",
+    "negotiation",
+    "negotiations",
+    "talks",
+    "truce",
+    "war",
+}
+
+GENERIC_MANUAL_RESTART_YES_CUES = {
+    "ceasefire collapsed",
+    "ceasefire ended",
+    "combat resumed",
+    "fighting resumed",
+    "hostilities resumed",
+    "renewed attacks",
+    "renewed fighting",
+    "resumed attacks",
+    "resumed combat",
+    "resumed fighting",
+    "restart",
+    "restarted",
+    "restarts",
+    "resume",
+    "resumed",
+    "resumes",
+    "reignite",
+    "reignited",
+    "war resumed",
+}
+
+GENERIC_MANUAL_RESTART_NO_CUES = {
+    "ceasefire held",
+    "ceasefire holds",
+    "ceasefire remains",
+    "hostilities halted",
+    "negotiations continued",
+    "no renewed attacks",
+    "no renewed fighting",
+    "pause held",
+    "sustained ceasefire",
+    "talks continue",
+    "talks continued",
+    "truce held",
+    "without renewed attacks",
+}
+
+GENERIC_MANUAL_APPOINTMENT_QUESTION_CUES = {
+    "become the next manager",
+    "become the next coach",
+    "next manager",
+    "next coach",
+    "manager of",
+    "coach of",
+    "head coach",
+    "hiring",
+    "hire",
+    "appointed",
+    "appointment",
+    "sign for",
+}
+
+GENERIC_MANUAL_APPOINTMENT_YES_CUES = {
+    "agreeing to join",
+    "all signs are pointing",
+    "already conducted",
+    "become their new manager",
+    "become their next manager",
+    "becoming their new manager",
+    "close to becoming",
+    "direct contact",
+    "emerged as the favoured candidate",
+    "emerged as the favored candidate",
+    "favoured candidate",
+    "favored candidate",
+    "held discussions",
+    "imminent signing",
+    "major step towards hiring",
+    "major step toward hiring",
+    "no plan b",
+    "only viable option",
+    "in favour of turning to",
+    "in favor of turning to",
+    "perferred candidate",
+    "preferred candidate",
+    "presentation in two weeks",
+    "set to become",
+    "sole candidate",
+    "talks over",
+    "top choice",
+    "video conversation",
+    "will be the next coach",
+    "will be the next manager",
+}
+
+GENERIC_MANUAL_APPOINTMENT_NO_CUES = {
+    "alternative candidates",
+    "denied direct contacts",
+    "denied talks",
+    "has not agreed",
+    "hasn't agreed",
+    "no agreement",
+    "no contact",
+    "no deal",
+    "no direct contact",
+    "no direct contacts",
+    "not agreed",
+    "not been agreed",
+    "not held talks",
+    "not spoken",
+}
+
+POLITICAL_FORECAST_KEYWORDS = {
+    "chamber",
+    "congress",
+    "democrat",
+    "democrats",
+    "election",
+    "electoral",
+    "generic ballot",
+    "gop",
+    "house",
+    "impeach",
+    "impeached",
+    "impeachment",
+    "midterm",
+    "midterms",
+    "poll",
+    "polling",
+    "presidency",
+    "republican",
+    "republicans",
+    "senate",
+    "white house",
+}
+
+POLITICAL_FORECAST_POSITIVE_CUES = {
+    "advantage",
+    "favored",
+    "favorite",
+    "favorites",
+    "forecast to win",
+    "hold",
+    "keep",
+    "lead",
+    "leading",
+    "likely",
+    "projected",
+    "retain",
+    "slight favorite",
+    "slight favorites",
+    "win",
+    "wins",
+}
+
+POLITICAL_FORECAST_NEGATIVE_CUES = {
+    "behind",
+    "difficult",
+    "lose",
+    "loses",
+    "loss",
+    "not favored",
+    "not strong enough",
+    "stretch",
+    "trail",
+    "trailing",
+    "underdog",
+    "uphill",
+    "unlikely",
 }
 
 MACRO_EASING_SUPPORT_PHRASES = {
@@ -428,6 +653,10 @@ TARGET_PASSAGE_CHARS = 900
 MIN_PASSAGE_CHARS = 160
 MAX_PASSAGES_PER_SOURCE = 6
 PASSAGES_FOR_EXTRACTION = 3
+MARKET_MATCH_MIN_SCORE = 0.58
+MODEL_ADJUDICATION_MIN_RELEVANCE = 0.35
+MODEL_ADJUDICATION_MIN_RELIABILITY = 0.35
+MODEL_ADJUDICATION_MIN_DIRECTIONAL_SCORE = 0.20
 
 
 class FactExtractionResult(BaseModel):
@@ -546,11 +775,9 @@ class AnalysisProcessor:
                 request = session.get(AnalysisRequest, request_id)
                 if request is None:
                     return
-                failed_stage = (
-                    request.current_stage
-                    if request.current_stage in STAGE_CONFIG_BY_KEY
-                    else "normalize"
-                )
+                failed_stage = request.current_stage or "normalize"
+                if failed_stage not in STAGE_CONFIG_BY_KEY:
+                    failed_stage = "normalize"
                 mark_stage_failed(
                     request,
                     failed_stage,
@@ -589,27 +816,23 @@ class AnalysisProcessor:
                 session.commit()
                 return market
 
-        if request.input_type == InputTypeEnum.CUSTOM_CLAIM:
-            mark_stage_skipped(
-                request,
-                "market_lookup",
-                "No Polymarket lookup was required for a free-form custom claim.",
-            )
-            session.add(request)
-            session.commit()
-            return None
-
         session.add(request)
         session.flush()
         mark_stage_running(
             request,
             "market_lookup",
-            "Resolving Polymarket market metadata and live pricing context.",
+            (
+                "Searching Polymarket for a matching market prior."
+                if request.input_type == InputTypeEnum.CUSTOM_CLAIM
+                else "Resolving Polymarket market metadata and live pricing context."
+            ),
         )
         session.commit()
 
         resolved_market: ResolvedMarketRecord | None = None
-        if request.input_type == InputTypeEnum.MARKET_ID:
+        if request.input_type == InputTypeEnum.CUSTOM_CLAIM:
+            resolved_market = self._find_matching_market_for_claim(session, request.input_text)
+        elif request.input_type == InputTypeEnum.MARKET_ID:
             resolved_market = self.polymarket_client.get_market_by_id(request.input_text)
         elif request.input_type == InputTypeEnum.MARKET_URL:
             resolved_market = self.polymarket_client.get_market_by_url(request.input_text)
@@ -618,7 +841,11 @@ class AnalysisProcessor:
             mark_stage_complete(
                 request,
                 "market_lookup",
-                "No matching Polymarket market metadata was found, so the run will continue without linked market context.",
+                (
+                    "No matching Polymarket market was found with enough confidence, so the run will continue without a market-price prior."
+                    if request.input_type == InputTypeEnum.CUSTOM_CLAIM
+                    else "No matching Polymarket market metadata was found, so the run will continue without linked market context."
+                ),
             )
             session.add(request)
             session.commit()
@@ -655,6 +882,96 @@ class AnalysisProcessor:
         session.commit()
         session.refresh(market)
         return market
+
+    def _find_matching_market_for_claim(
+        self,
+        session: Session,
+        claim: str,
+    ) -> ResolvedMarketRecord | None:
+        candidates: list[ResolvedMarketRecord] = []
+
+        local_markets = session.scalars(select(Market).limit(200)).all()
+        for market in local_markets:
+            if market.status == "closed":
+                continue
+            candidates.append(self._resolved_record_from_market(market))
+
+        search_method = getattr(self.polymarket_client, "search_markets_for_claim", None)
+        if callable(search_method):
+            candidates.extend(search_method(claim, limit=10))
+
+        ranked: list[tuple[float, ResolvedMarketRecord]] = []
+        seen_ids: set[str] = set()
+        for candidate in candidates:
+            if not candidate.polymarket_id or candidate.polymarket_id in seen_ids:
+                continue
+            seen_ids.add(candidate.polymarket_id)
+            if candidate.status == "closed":
+                continue
+            score = self._market_match_score(
+                claim,
+                title=candidate.title,
+                description=candidate.description,
+                rules_text=candidate.rules_text,
+            )
+            if score >= MARKET_MATCH_MIN_SCORE:
+                ranked.append((score, candidate))
+
+        if not ranked:
+            return None
+        ranked.sort(
+            key=lambda item: (
+                item[0],
+                item[1].liquidity or 0.0,
+                item[1].volume_24h or 0.0,
+            ),
+            reverse=True,
+        )
+        return ranked[0][1]
+
+    @staticmethod
+    def _resolved_record_from_market(market: Market) -> ResolvedMarketRecord:
+        return ResolvedMarketRecord(
+            polymarket_id=market.polymarket_id,
+            title=market.title,
+            url=market.url,
+            rules_text=market.rules_text,
+            description=market.description,
+            yes_bid=market.yes_bid,
+            yes_ask=market.yes_ask,
+            no_bid=market.no_bid,
+            no_ask=market.no_ask,
+            liquidity=market.liquidity,
+            volume_24h=market.volume_24h,
+            spread=market.spread,
+            expiry_at=market.expiry_at,
+            status=market.status,
+        )
+
+    @classmethod
+    def _market_match_score(
+        cls,
+        claim: str,
+        *,
+        title: str | None,
+        description: str | None,
+        rules_text: str | None,
+    ) -> float:
+        claim_terms = cls._signal_terms(cls._expand_search_aliases(claim))
+        if not claim_terms:
+            return 0.0
+        title_terms = cls._signal_terms(cls._expand_search_aliases(title or ""))
+        full_terms = cls._signal_terms(
+            cls._expand_search_aliases(" ".join(part or "" for part in [title, description, rules_text]))
+        )
+        if not full_terms:
+            return 0.0
+
+        full_coverage = len(claim_terms.intersection(full_terms)) / len(claim_terms)
+        title_coverage = len(claim_terms.intersection(title_terms)) / len(claim_terms)
+        missing_penalty = min(len(claim_terms.difference(full_terms)) * 0.03, 0.18)
+        score = (full_coverage * 0.68) + (title_coverage * 0.32) - missing_penalty
+        return round(max(min(score, 1.0), 0.0), 4)
 
     def _build_rule_parse(
         self,
@@ -934,12 +1251,20 @@ class AnalysisProcessor:
         ranked_by_url: dict[str, tuple[float, SearchSourceDraft]] = {}
 
         for search_request in self._search_requests(rule_parse):
-            results = self.tavily_client.search(
-                query=search_request["query"],
-                max_results=search_request["max_results"],
-                include_domains=search_request.get("include_domains"),
-                topic=search_request["topic"],
-            )
+            try:
+                results = self.tavily_client.search(
+                    query=search_request["query"],
+                    max_results=search_request["max_results"],
+                    include_domains=search_request.get("include_domains"),
+                    topic=search_request["topic"],
+                )
+            except httpx.HTTPError as exc:
+                logger.warning(
+                    "Skipping Tavily search for %r after provider error: %s",
+                    search_request["query"],
+                    exc,
+                )
+                continue
             for result in results:
                 score = self._search_result_relevance(rule_parse, result)
                 current = ranked_by_url.get(result.url)
@@ -974,6 +1299,29 @@ class AnalysisProcessor:
                     "max_results": SEARCH_LIMIT,
                     "include_domains": official_domains,
                     "topic": "general",
+                },
+            ]
+
+        if self._is_political_forecast_question(rule_parse.question_text):
+            question = rule_parse.question_text.rstrip("?")
+            return [
+                {
+                    "query": question,
+                    "max_results": SEARCH_LIMIT,
+                    "include_domains": None,
+                    "topic": "general",
+                },
+                {
+                    "query": f"{question} forecast polls generic ballot Cook Political Report Inside Elections Sabato",
+                    "max_results": max(SEARCH_LIMIT + 2, 6),
+                    "include_domains": None,
+                    "topic": "general",
+                },
+                {
+                    "query": f"{question} latest election forecast polling analysis",
+                    "max_results": SEARCH_LIMIT,
+                    "include_domains": None,
+                    "topic": "news",
                 },
             ]
 
@@ -1490,7 +1838,12 @@ class AnalysisProcessor:
             source = session.get(Source, fact.source_id)
             if source is None:
                 continue
-            mapping = self._map_fact_to_factor(rule_parse, source, fact)
+            mapping = self._map_fact_to_factor(
+                rule_parse,
+                source,
+                fact,
+                session=session,
+            )
             seen_groups[fact.uniqueness_group or ""] += 1
             uniqueness_multiplier = (
                 1.0
@@ -1551,7 +1904,7 @@ class AnalysisProcessor:
         trusted_posts = [
             post
             for post in social_draft.trusted_posts
-            if post.trust_tier in SOCIAL_FACTOR_TIERS
+            if post.trust_tier in SOCIAL_FACTOR_TIERS and social_post_is_trusted(post)
         ][:LIVE_SOCIAL_LIMIT]
         social_draft = self._normalize_social_intelligence(social_draft, trusted_posts)
         social_summary = SocialIntelSummary(
@@ -1571,11 +1924,13 @@ class AnalysisProcessor:
         contexts: list[SourceContext] = []
         for post in trusted_posts:
             excerpt = post.post_summary.strip()
+            handle = post.handle.lstrip("@").strip()
+            title = f"{post.display_name} (@{handle})" if handle else post.display_name
             source = Source(
                 analysis_run_id=analysis_run.id,
                 url=post.post_url,
                 domain=self._domain_from_url(post.post_url),
-                title=f"{post.display_name} (@{post.handle})",
+                title=title,
                 source_kind=SourceKindEnum.LIVE_SOCIAL,
                 source_tier=post.trust_tier,
                 published_at=post.post_timestamp,
@@ -1585,7 +1940,7 @@ class AnalysisProcessor:
                 canonical_url=post.post_url,
                 is_paywalled=False,
                 metadata_json={
-                    "handle": post.handle,
+                    "handle": handle,
                     "display_name": post.display_name,
                     "account_category": post.account_category,
                     "trust_confidence": post.trust_confidence,
@@ -1628,7 +1983,9 @@ class AnalysisProcessor:
         prior = self._market_prior(market)
         fact_lookup = {fact.id: fact for fact in facts}
         source_lookup = {source_context.source.id: source_context.source for source_context in source_contexts}
-        evidence = self._capped_evidence_score(factors, fact_lookup, source_lookup)
+        factor_evidence = self._capped_evidence_score(factors, fact_lookup, source_lookup)
+        crowd_signal = crowd_signal_modifier(social_intel_summary)
+        evidence = max(min(factor_evidence + crowd_signal.evidence_delta, 2.5), -2.5)
 
         priced_in_risk = self._priced_in_risk(market, source_contexts, social_intel_summary)
         uncertainty = BASE_UNCERTAINTY[rule_parse.template_detected]
@@ -1665,12 +2022,17 @@ class AnalysisProcessor:
             confidence_label,
             social_intel_summary,
         )
-        qualitative_label = self._qualitative_label(factors, evidence)
-        numeric_estimate_available = True
-        numeric_estimate_reason: str | None = None
-        p_hat: float | None = raw_p_hat
-        p_low: float | None = raw_p_low
-        p_high: float | None = raw_p_high
+        qualitative_label = self._qualitative_label(factors, evidence, crowd_signal.evidence_delta)
+        numeric_estimate_available, numeric_estimate_reason = self._numeric_estimate_gate(
+            factors,
+            facts,
+            source_lookup,
+            evidence,
+            crowd_signal.evidence_delta,
+        )
+        p_hat: float | None = raw_p_hat if numeric_estimate_available else None
+        p_low: float | None = raw_p_low if numeric_estimate_available else None
+        p_high: float | None = raw_p_high if numeric_estimate_available else None
 
         recommendation = self._recommendation(
             market=market,
@@ -1743,6 +2105,8 @@ class AnalysisProcessor:
                 f"contextual_factors: {[factor.exclusion_reason or factor.rationale for factor in contextual_factors]}",
                 f"social_summary: {social_intel_summary.summary if social_intel_summary else 'none'}",
                 f"social_themes: {social_intel_summary.key_themes if social_intel_summary else []}",
+                f"crowd_signal_evidence: {crowd_signal_modifier(social_intel_summary).evidence_delta}",
+                f"crowd_signal_reason: {crowd_signal_modifier(social_intel_summary).reason}",
             ]
         )
 
@@ -1761,6 +2125,8 @@ class AnalysisProcessor:
             except Exception:
                 pass
 
+        crowd_signal = crowd_signal_modifier(social_intel_summary)
+
         if score_outcome.p_hat is not None:
             yes_probability = self._format_probability(score_outcome.p_hat)
             no_probability = self._format_probability(1 - score_outcome.p_hat)
@@ -1770,6 +2136,8 @@ class AnalysisProcessor:
                 f"Top YES evidence: {self._join_factor_rationales(scored_yes_factors)}. "
                 f"Top NO evidence: {self._join_factor_rationales(scored_no_factors)}."
             )
+            if crowd_signal.evidence_delta:
+                final_summary += f" Crowd signal: {crowd_signal.reason}"
         else:
             qualitative = (
                 score_outcome.qualitative_label.value.replace("_", " ")
@@ -1789,6 +2157,7 @@ class AnalysisProcessor:
                 f"{lead} "
                 f"Scored YES evidence: {self._join_factor_rationales(scored_yes_factors)}. "
                 f"Scored NO evidence: {self._join_factor_rationales(scored_no_factors)}. "
+                f"Crowd signal: {crowd_signal.reason} "
                 f"No numeric estimate is shown because {score_outcome.numeric_estimate_reason or 'the directional evidence is still too weak or contextual'}."
             )
         why_wrong = (
@@ -1952,8 +2321,316 @@ class AnalysisProcessor:
         rule_parse: RuleParse,
         source: Source,
         fact: FactClaim,
+        *,
+        session: Session | None = None,
     ) -> FactorMappingDraft:
+        if session is not None:
+            adjudicated = self._model_adjudicated_factor_mapping(
+                session=session,
+                rule_parse=rule_parse,
+                source=source,
+                fact=fact,
+            )
+            if adjudicated is not None:
+                return adjudicated
         return self._deterministic_factor_mapping(rule_parse, source, fact)
+
+    def _model_adjudicated_factor_mapping(
+        self,
+        *,
+        session: Session,
+        rule_parse: RuleParse,
+        source: Source,
+        fact: FactClaim,
+    ) -> FactorMappingDraft | None:
+        judgments = self._collect_evidence_judgments(
+            session=session,
+            rule_parse=rule_parse,
+            source=source,
+            fact=fact,
+        )
+        if not judgments:
+            return None
+        return self._aggregate_evidence_judgments(
+            rule_parse=rule_parse,
+            source=source,
+            fact=fact,
+            judgments=judgments,
+        )
+
+    def _collect_evidence_judgments(
+        self,
+        *,
+        session: Session,
+        rule_parse: RuleParse,
+        source: Source,
+        fact: FactClaim,
+    ) -> list[EvidenceAdjudicationDraft]:
+        context = "\n".join(
+            [
+                f"question: {rule_parse.question_text}",
+                f"claim_family: {rule_parse.claim_family.value}",
+                f"yes_condition: {rule_parse.yes_condition}",
+                f"no_condition: {rule_parse.no_condition}",
+                f"directional_scoring_policy: {rule_parse.directional_scoring_policy}",
+                f"source_title: {source.title or ''}",
+                f"source_kind: {source.source_kind.value}",
+                f"source_tier: {source.source_tier.value}",
+                f"source_domain: {source.domain or ''}",
+                f"source_excerpt: {source.excerpt}",
+                f"fact: {fact.normalized_fact}",
+                f"quote: {fact.exact_quote}",
+                f"claim_type: {fact.claim_type.value}",
+                f"directness: {fact.directness.value}",
+                f"verification: {fact.verifier_status.value}",
+                f"verification_notes: {fact.verifier_notes or ''}",
+                f"current_evidence_role: {fact.evidence_role.value}",
+            ]
+        )
+        prompt = load_prompt("evidence_adjudication_v1.txt").replace("{{context}}", context)
+        judgments: list[EvidenceAdjudicationDraft] = []
+
+        if self.openai_client.is_configured:
+            try:
+                judgments.append(
+                    self.openai_client.generate_structured(
+                        session=session,
+                        task_name="evidence_adjudication",
+                        prompt_version="evidence_adjudication_v1",
+                        system_prompt="Return conservative structured JSON only.",
+                        user_prompt=prompt,
+                        schema_model=EvidenceAdjudicationDraft,
+                    )
+                )
+            except Exception:
+                logger.exception("OpenAI evidence adjudication failed; falling back to other judges.")
+
+        if self.xai_client.is_configured:
+            try:
+                generate_structured = getattr(self.xai_client, "generate_structured", None)
+                if callable(generate_structured):
+                    judgments.append(
+                        generate_structured(
+                            session=session,
+                            task_name="evidence_adjudication",
+                            prompt_version="evidence_adjudication_v1",
+                            system_prompt="Return conservative structured JSON only.",
+                            user_prompt=prompt,
+                            schema_model=EvidenceAdjudicationDraft,
+                        )
+                    )
+                else:
+                    judgments.append(
+                        self.xai_client.generate_structured_with_tools(
+                            session=session,
+                            task_name="evidence_adjudication",
+                            prompt_version="evidence_adjudication_v1",
+                            system_prompt="Return conservative structured JSON only.",
+                            user_prompt=prompt,
+                            schema_model=EvidenceAdjudicationDraft,
+                            tools=[],
+                        )
+                    )
+            except Exception:
+                logger.exception("Grok evidence adjudication failed; falling back to available judges.")
+
+        return judgments
+
+    def _aggregate_evidence_judgments(
+        self,
+        *,
+        rule_parse: RuleParse,
+        source: Source,
+        fact: FactClaim,
+        judgments: list[EvidenceAdjudicationDraft],
+    ) -> FactorMappingDraft | None:
+        avg_relevance = sum(judgment.relevance_score for judgment in judgments) / len(judgments)
+        avg_reliability = sum(judgment.reliability_score for judgment in judgments) / len(judgments)
+        avg_direction = sum(judgment.directional_score for judgment in judgments) / len(judgments)
+        role = self._consensus_evidence_role(judgments, avg_direction)
+        role = self._guard_model_evidence_role(
+            rule_parse=rule_parse,
+            source=source,
+            fact=fact,
+            proposed_role=role,
+        )
+        stance = self._stance_from_directional_score(avg_direction)
+        strength = self._strength_from_judgment_scores(
+            avg_direction=avg_direction,
+            avg_relevance=avg_relevance,
+            avg_reliability=avg_reliability,
+            judgments=judgments,
+        )
+
+        allowed, exclusion_reason = self._role_allowed_in_scoring(
+            rule_parse=rule_parse,
+            source=source,
+            fact=fact,
+            policy=self._scoring_policy(rule_parse),
+            evidence_role=role,
+        )
+        enough_signal = (
+            avg_relevance >= MODEL_ADJUDICATION_MIN_RELEVANCE
+            and avg_reliability >= MODEL_ADJUDICATION_MIN_RELIABILITY
+            and abs(avg_direction) >= MODEL_ADJUDICATION_MIN_DIRECTIONAL_SCORE
+            and any(judgment.used_in_scoring for judgment in judgments)
+        )
+
+        rationale = self._model_adjudication_rationale(
+            judgments,
+            avg_relevance=avg_relevance,
+            avg_reliability=avg_reliability,
+            avg_direction=avg_direction,
+        )
+        if not allowed or not enough_signal or stance == StanceEnum.NEUTRAL:
+            return FactorMappingDraft(
+                stance=StanceEnum.NEUTRAL,
+                strength=strength,
+                evidence_role=role,
+                used_in_scoring=False,
+                exclusion_reason=exclusion_reason
+                or "Model judges treated this as context, unreliable, or too weakly directional.",
+                rationale=rationale,
+            )
+
+        return FactorMappingDraft(
+            stance=stance,
+            strength=strength,
+            evidence_role=role,
+            used_in_scoring=True,
+            exclusion_reason=None,
+            rationale=rationale,
+        )
+
+    @staticmethod
+    def _consensus_evidence_role(
+        judgments: list[EvidenceAdjudicationDraft],
+        avg_direction: float,
+    ) -> EvidenceRoleEnum:
+        role_counts = Counter(judgment.evidence_role for judgment in judgments)
+        if role_counts:
+            role, count = role_counts.most_common(1)[0]
+            if count > 1 or len(judgments) == 1:
+                return role
+        if avg_direction >= MODEL_ADJUDICATION_MIN_DIRECTIONAL_SCORE:
+            return EvidenceRoleEnum.DIRECT_SUPPORT
+        if avg_direction <= -MODEL_ADJUDICATION_MIN_DIRECTIONAL_SCORE:
+            return EvidenceRoleEnum.DIRECT_CONTRADICTION
+        return EvidenceRoleEnum.BACKGROUND
+
+    @staticmethod
+    def _stance_from_directional_score(score: float) -> StanceEnum:
+        if score >= MODEL_ADJUDICATION_MIN_DIRECTIONAL_SCORE:
+            return StanceEnum.YES
+        if score <= -MODEL_ADJUDICATION_MIN_DIRECTIONAL_SCORE:
+            return StanceEnum.NO
+        return StanceEnum.NEUTRAL
+
+    @staticmethod
+    def _strength_from_judgment_scores(
+        *,
+        avg_direction: float,
+        avg_relevance: float,
+        avg_reliability: float,
+        judgments: list[EvidenceAdjudicationDraft],
+    ) -> StrengthEnum:
+        if not judgments:
+            return StrengthEnum.WEAK
+        strength_votes = Counter(judgment.strength for judgment in judgments)
+        voted_strength = strength_votes.most_common(1)[0][0]
+        combined = abs(avg_direction) * avg_relevance * avg_reliability
+        if combined >= 0.48 and voted_strength == StrengthEnum.STRONG:
+            return StrengthEnum.STRONG
+        if combined >= 0.20 or voted_strength == StrengthEnum.MEDIUM:
+            return StrengthEnum.MEDIUM
+        return StrengthEnum.WEAK
+
+    @staticmethod
+    def _model_adjudication_rationale(
+        judgments: list[EvidenceAdjudicationDraft],
+        *,
+        avg_relevance: float,
+        avg_reliability: float,
+        avg_direction: float,
+    ) -> str:
+        snippets = [
+            judgment.rationale.strip()
+            for judgment in judgments
+            if judgment.rationale and judgment.rationale.strip()
+        ][:2]
+        prefix = (
+            "Model adjudication average: "
+            f"direction {avg_direction:+.2f}, relevance {avg_relevance:.2f}, "
+            f"reliability {avg_reliability:.2f}."
+        )
+        if snippets:
+            return f"{prefix} " + " / ".join(snippets)
+        return prefix
+
+    @staticmethod
+    def _guard_model_evidence_role(
+        *,
+        rule_parse: RuleParse,
+        source: Source,
+        fact: FactClaim,
+        proposed_role: EvidenceRoleEnum,
+    ) -> EvidenceRoleEnum:
+        if fact.claim_type == ClaimTypeEnum.RULE_NOTE or source.source_kind == SourceKindEnum.MANUAL_INPUT:
+            return EvidenceRoleEnum.BACKGROUND
+        if source.source_kind in {SourceKindEnum.MANUAL_SOCIAL, SourceKindEnum.LIVE_SOCIAL} and source.source_tier in {
+            SourceTierEnum.GENERIC_SOCIAL,
+            SourceTierEnum.REPORTER_SOCIAL,
+        }:
+            return EvidenceRoleEnum.SENTIMENT
+        if AnalysisProcessor._is_historical_appointment_context(rule_parse, fact.normalized_fact):
+            return EvidenceRoleEnum.BACKGROUND
+        text = fact.normalized_fact.lower()
+        if any(keyword in text for keyword in TIMING_KEYWORDS):
+            return EvidenceRoleEnum.TIMING
+        if any(keyword in text for keyword in PROCEDURAL_KEYWORDS):
+            return EvidenceRoleEnum.PROCEDURAL
+        return proposed_role
+
+    @staticmethod
+    def _is_historical_appointment_context(rule_parse: RuleParse, text: str) -> bool:
+        question_context = (
+            f"{getattr(rule_parse, 'question_text', '')} "
+            f"{getattr(rule_parse, 'yes_condition', '')}"
+        ).lower()
+        if not any(cue in question_context for cue in GENERIC_MANUAL_APPOINTMENT_QUESTION_CUES):
+            return False
+
+        lowered = text.lower()
+        has_past_marker = bool(re.search(r"\b(19|20)\d{2}\b", lowered)) or any(
+            cue in lowered
+            for cue in {
+                "former",
+                "previous",
+                "previously",
+                "left",
+                "managed",
+                "was appointed",
+                "was unveiled",
+                "took over",
+                "tenure",
+            }
+        )
+        has_current_direction = any(
+            cue in lowered
+            for cue in {
+                "current",
+                "currently",
+                "direct contact",
+                "held discussions",
+                "negotiations",
+                "preferred choice",
+                "return",
+                "set to",
+                "talks",
+                "top choice",
+            }
+        )
+        return has_past_marker and not has_current_direction
 
     def _normalize_evidence_role(
         self,
@@ -1974,6 +2651,8 @@ class AnalysisProcessor:
 
         if rule_parse.claim_family == ClaimFamilyEnum.LEGAL_CASE:
             return self._normalize_legal_evidence_role(rule_parse, source, fact, proposed_role)
+        if rule_parse.claim_family == ClaimFamilyEnum.GENERIC_MANUAL:
+            return self._normalize_generic_manual_evidence_role(rule_parse, fact, proposed_role)
 
         text = fact.normalized_fact.lower()
         if any(keyword in text for keyword in TIMING_KEYWORDS):
@@ -1994,10 +2673,10 @@ class AnalysisProcessor:
             return EvidenceRoleEnum.PROCEDURAL
 
         has_injunction_outcome = self._legal_injunction_outcome(text) is not None
-        has_decision_signal = has_injunction_outcome or any(
-            keyword in text for keyword in LEGAL_DECISION_SIGNALS
+        has_decision_signal = has_injunction_outcome or self._contains_any_phrase(
+            text, LEGAL_DECISION_SIGNALS
         )
-        has_commentary_cue = any(keyword in text for keyword in LEGAL_COMMENTARY_CUES)
+        has_commentary_cue = self._contains_any_phrase(text, LEGAL_COMMENTARY_CUES)
         has_background_signal = any(keyword in text for keyword in LEGAL_BACKGROUND_KEYWORDS)
         heuristic_role = self._fallback_legal_evidence_role(rule_parse, fact, text)
 
@@ -2026,6 +2705,67 @@ class AnalysisProcessor:
         }:
             return heuristic_role
         return proposed_role
+
+    def _normalize_generic_manual_evidence_role(
+        self,
+        rule_parse: RuleParse,
+        fact: FactClaim,
+        proposed_role: EvidenceRoleEnum,
+    ) -> EvidenceRoleEnum:
+        text = fact.normalized_fact.lower()
+        if any(keyword in text for keyword in TIMING_KEYWORDS):
+            return EvidenceRoleEnum.TIMING
+        if any(keyword in text for keyword in PROCEDURAL_KEYWORDS):
+            return EvidenceRoleEnum.PROCEDURAL
+
+        aligned_stance = self._condition_alignment(rule_parse, fact.normalized_fact)
+        appointment_alignment = self._generic_manual_appointment_alignment(rule_parse, text)
+        speculative_without_appointment_signal = (
+            self._generic_manual_is_speculative(fact.normalized_fact)
+            and appointment_alignment is None
+        )
+        if proposed_role not in {
+            EvidenceRoleEnum.OUTCOME,
+            EvidenceRoleEnum.DIRECT_SUPPORT,
+            EvidenceRoleEnum.DIRECT_CONTRADICTION,
+        }:
+            if (
+                proposed_role == EvidenceRoleEnum.BACKGROUND
+                and aligned_stance != StanceEnum.NEUTRAL
+                and not speculative_without_appointment_signal
+            ):
+                return (
+                    EvidenceRoleEnum.DIRECT_SUPPORT
+                    if aligned_stance == StanceEnum.YES
+                    else EvidenceRoleEnum.DIRECT_CONTRADICTION
+                )
+            return proposed_role
+
+        if aligned_stance == StanceEnum.NEUTRAL:
+            return (
+                EvidenceRoleEnum.COMMENTARY
+                if fact.claim_type in {ClaimTypeEnum.OPINION, ClaimTypeEnum.FORECAST}
+                else EvidenceRoleEnum.BACKGROUND
+            )
+
+        if speculative_without_appointment_signal:
+            return (
+                EvidenceRoleEnum.COMMENTARY
+                if fact.claim_type in {ClaimTypeEnum.OPINION, ClaimTypeEnum.FORECAST}
+                else EvidenceRoleEnum.BACKGROUND
+            )
+
+        if proposed_role == EvidenceRoleEnum.DIRECT_SUPPORT and aligned_stance != StanceEnum.YES:
+            return EvidenceRoleEnum.BACKGROUND
+        if proposed_role == EvidenceRoleEnum.DIRECT_CONTRADICTION and aligned_stance != StanceEnum.NO:
+            return EvidenceRoleEnum.BACKGROUND
+
+        return proposed_role
+
+    @staticmethod
+    def _generic_manual_is_speculative(text: str) -> bool:
+        lowered = text.lower()
+        return any(cue in lowered for cue in GENERIC_MANUAL_SPECULATIVE_CUES)
 
     def _fallback_rule_parse(
         self,
@@ -2119,7 +2859,29 @@ class AnalysisProcessor:
                 SourceKindEnum.LIVE_SOCIAL,
             }:
                 claim_type = ClaimTypeEnum.SOCIAL_SIGNAL
-            elif "will " in cleaned.lower() or "expects" in cleaned.lower():
+            elif (
+                "will " in cleaned.lower()
+                or "expects" in cleaned.lower()
+                or (
+                    self._is_political_forecast_question(question_text)
+                    and any(
+                        cue in cleaned.lower()
+                        for cue in {
+                            "advantage",
+                            "favored",
+                            "favorite",
+                            "favorites",
+                            "forecast",
+                            "forecasters",
+                            "generic ballot",
+                            "poll",
+                            "polling",
+                            "projected",
+                            "rating",
+                        }
+                    )
+                )
+            ):
                 claim_type = ClaimTypeEnum.FORECAST
             directness = DirectnessEnum.DIRECT
             if source_context.source.source_kind in {SourceKindEnum.NEWS, SourceKindEnum.PREMIUM_NEWS}:
@@ -2214,8 +2976,8 @@ class AnalysisProcessor:
             return EvidenceRoleEnum.PROCEDURAL
 
         favors_yes = self._positive_legal_injunction_favors_yes(rule_parse)
-        has_decision_signal = self._legal_injunction_outcome(text) is not None or any(
-            keyword in text for keyword in LEGAL_DECISION_SIGNALS
+        has_decision_signal = self._legal_injunction_outcome(text) is not None or self._contains_any_phrase(
+            text, LEGAL_DECISION_SIGNALS
         )
         if any(keyword in text for keyword in LEGAL_BACKGROUND_KEYWORDS) and not has_decision_signal:
             return EvidenceRoleEnum.BACKGROUND
@@ -2232,28 +2994,16 @@ class AnalysisProcessor:
                 if favors_yes
                 else EvidenceRoleEnum.DIRECT_SUPPORT
             )
-        if any(keyword in text for keyword in LEGAL_MERITS_YES):
-            return (
-                EvidenceRoleEnum.DIRECT_SUPPORT
-                if favors_yes
-                else EvidenceRoleEnum.DIRECT_CONTRADICTION
-            )
-        if any(keyword in text for keyword in LEGAL_MERITS_NO):
-            return (
-                EvidenceRoleEnum.DIRECT_CONTRADICTION
-                if favors_yes
-                else EvidenceRoleEnum.DIRECT_SUPPORT
-            )
+        legal_alignment = self._legal_merits_alignment(rule_parse, text)
+        if legal_alignment == StanceEnum.YES:
+            return EvidenceRoleEnum.DIRECT_SUPPORT
+        if legal_alignment == StanceEnum.NO:
+            return EvidenceRoleEnum.DIRECT_CONTRADICTION
         if any(keyword in text for keyword in PROCEDURAL_KEYWORDS):
             return EvidenceRoleEnum.PROCEDURAL
         if any(keyword in text for keyword in TIMING_KEYWORDS):
             return EvidenceRoleEnum.TIMING
 
-        match = self._condition_alignment(rule_parse, fact.normalized_fact)
-        if match == StanceEnum.YES:
-            return EvidenceRoleEnum.DIRECT_SUPPORT
-        if match == StanceEnum.NO:
-            return EvidenceRoleEnum.DIRECT_CONTRADICTION
         if fact.claim_type in {ClaimTypeEnum.OPINION, ClaimTypeEnum.FORECAST}:
             return EvidenceRoleEnum.COMMENTARY
         return EvidenceRoleEnum.BACKGROUND
@@ -2303,7 +3053,7 @@ class AnalysisProcessor:
             evidence_role=evidence_role,
             used_in_scoring=True,
             exclusion_reason=None,
-            rationale=f"{fact.normalized_fact} supports the {stance.value.upper()} case against the parsed proposition.",
+            rationale=f"{fact.normalized_fact} supports the {stance.value.upper()} case.",
         )
 
     def _fallback_social_intelligence(self, rule_parse: RuleParse) -> SocialIntelDraft:
@@ -2336,21 +3086,48 @@ class AnalysisProcessor:
         social_draft: SocialIntelDraft,
         trusted_posts: list[TrustedSocialPostDraft],
     ) -> SocialIntelDraft:
+        social_draft.summary = AnalysisProcessor._strip_model_markup(social_draft.summary)
+        social_draft.key_themes = [
+            AnalysisProcessor._strip_model_markup(theme)
+            for theme in social_draft.key_themes
+            if AnalysisProcessor._strip_model_markup(theme)
+        ]
+        for post in trusted_posts:
+            post.post_summary = AnalysisProcessor._strip_model_markup(post.post_summary)
+            post.possible_facts = [
+                AnalysisProcessor._strip_model_markup(fact)
+                for fact in post.possible_facts
+                if AnalysisProcessor._strip_model_markup(fact)
+            ]
+
         if trusted_posts:
             social_draft.trusted_accounts_count = len(trusted_posts)
             return social_draft
 
-        if (
-            social_draft.consensus_strength != ConsensusStrengthEnum.WEAK
-            or "trusted" in social_draft.summary.lower()
-        ):
-            social_draft.consensus_strength = ConsensusStrengthEnum.WEAK
+        if "trusted" in social_draft.summary.lower():
             social_draft.summary = (
                 "Live X discussion was sampled, but no trusted-account posts met the persistence "
-                "threshold. Treat this as broad narrative context only."
+                "threshold. Treat this as broad crowd flow, not trusted evidence."
             )
         social_draft.trusted_accounts_count = 0
         return social_draft
+
+    @staticmethod
+    def _strip_model_markup(text: str) -> str:
+        cleaned = re.sub(
+            r"<grok:render\b[^>]*>.*?</grok:render>",
+            " ",
+            text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        cleaned = re.sub(
+            r"<argument\b[^>]*>.*?</argument>",
+            " ",
+            cleaned,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        cleaned = re.sub(r"\s+", " ", cleaned)
+        return cleaned.strip()
 
     def _recommendation(
         self,
@@ -2458,8 +3235,15 @@ class AnalysisProcessor:
         source: Source,
         fact: FactClaim,
         policy: dict[str, Any],
+        evidence_role: EvidenceRoleEnum | None = None,
     ) -> tuple[bool, str | None]:
-        evidence_role = fact.evidence_role
+        evidence_role = evidence_role or fact.evidence_role
+        domain = (source.domain or "").removeprefix("www.").lower()
+        if domain in SOCIAL_WEB_DOMAINS and source.source_kind not in {
+            SourceKindEnum.MANUAL_SOCIAL,
+            SourceKindEnum.LIVE_SOCIAL,
+        }:
+            return False, "Social-platform pages scraped as web results are contextual only."
 
         if evidence_role in {
             EvidenceRoleEnum.BACKGROUND,
@@ -2550,6 +3334,7 @@ class AnalysisProcessor:
         facts: list[FactClaim],
         source_lookup: dict[int, Source],
         evidence: float,
+        crowd_signal_evidence: float = 0.0,
     ) -> tuple[bool, str | None]:
         scored_directional_factors = [
             factor
@@ -2557,38 +3342,56 @@ class AnalysisProcessor:
             if self._factor_used_in_scoring(factor)
             and factor.stance in {StanceEnum.YES, StanceEnum.NO}
         ]
-        if len(scored_directional_factors) < 2:
-            return False, "there are fewer than two scored directional factors"
+        has_crowd_signal = abs(crowd_signal_evidence) >= 0.025
+        if not scored_directional_factors and not has_crowd_signal:
+            return False, "no directional source or crowd signal was strong enough to estimate"
+
+        if abs(evidence) < 0.02:
+            return False, "net directional evidence is effectively balanced"
 
         contributing_source_ids = {
             fact.source_id
             for fact in facts
             if fact.id in {factor.fact_claim_id for factor in scored_directional_factors}
         }
-        if len(contributing_source_ids) < 2:
-            return False, "the directional case relies on fewer than two distinct sources"
+        caution_reasons: list[str] = []
+        if len(scored_directional_factors) < 2:
+            if has_crowd_signal:
+                caution_reasons.append(
+                    "estimate leans on broad X crowd flow because fewer than two scored source factors were available"
+                )
+            else:
+                caution_reasons.append(
+                    "estimate is based on a single scored directional factor"
+                )
+
+        if len(contributing_source_ids) < 2 and not has_crowd_signal:
+            caution_reasons.append("directional case relies on fewer than two distinct sources")
 
         contributing_sources = [source_lookup[source_id] for source_id in contributing_source_ids if source_id in source_lookup]
         if not any(
             source.source_tier in NUMERIC_REQUIRED_SOURCE_TIERS
             and source.source_kind not in {SourceKindEnum.MANUAL_SOCIAL, SourceKindEnum.LIVE_SOCIAL}
             for source in contributing_sources
-        ):
-            return False, "the run lacks a qualifying non-social source for numeric output"
+        ) and not has_crowd_signal:
+            caution_reasons.append("no qualifying non-social directional source was available")
 
         if abs(evidence) < 0.10:
-            return False, "net directional evidence is still below the numeric threshold"
+            caution_reasons.append("net directional evidence is light")
 
         excluded_or_contextual = sum(1 for factor in factors if not factor.used_in_scoring)
         if excluded_or_contextual > len(scored_directional_factors) * 2:
-            return False, "contextual and excluded facts still dominate the evidence mix"
+            caution_reasons.append("contextual facts still dominate the evidence mix")
 
+        if caution_reasons:
+            return True, "Decision estimate shown with low confidence: " + "; ".join(caution_reasons)
         return True, None
 
     @staticmethod
     def _qualitative_label(
         factors: list[Factor],
         evidence: float,
+        crowd_signal_evidence: float = 0.0,
     ) -> QualitativeLabelEnum:
         scored_directional_factors = [
             factor
@@ -2596,8 +3399,14 @@ class AnalysisProcessor:
             if AnalysisProcessor._factor_used_in_scoring(factor)
             and factor.stance in {StanceEnum.YES, StanceEnum.NO}
         ]
-        if len(scored_directional_factors) < 2 or abs(evidence) < 0.05:
+        if abs(evidence) < 0.025:
+            if scored_directional_factors:
+                return QualitativeLabelEnum.MIXED
             return QualitativeLabelEnum.INSUFFICIENT_BASIS
+
+        if len(scored_directional_factors) < 2:
+            return QualitativeLabelEnum.LEANS_YES if evidence > 0 else QualitativeLabelEnum.LEANS_NO
+
         yes_count = sum(1 for factor in scored_directional_factors if factor.stance == StanceEnum.YES)
         no_count = sum(1 for factor in scored_directional_factors if factor.stance == StanceEnum.NO)
         if abs(yes_count - no_count) <= 1 and abs(evidence) < 0.14:
@@ -2608,6 +3417,21 @@ class AnalysisProcessor:
         fact_terms = self._signal_terms(self._expand_search_aliases(text))
         yes_terms = self._signal_terms(self._expand_search_aliases(rule_parse.yes_condition))
         no_terms = self._signal_terms(self._expand_search_aliases(rule_parse.no_condition))
+        political_alignment = self._political_forecast_alignment(rule_parse, text)
+        if political_alignment is not None:
+            return political_alignment
+        if rule_parse.claim_family == ClaimFamilyEnum.LEGAL_CASE:
+            return self._legal_merits_alignment(rule_parse, text) or StanceEnum.NEUTRAL
+        if rule_parse.claim_family == ClaimFamilyEnum.GENERIC_MANUAL:
+            generic_alignment = self._generic_manual_alignment(
+                rule_parse=rule_parse,
+                fact_terms=fact_terms,
+                yes_terms=yes_terms,
+                no_terms=no_terms,
+                text=text,
+            )
+            if generic_alignment is not None:
+                return generic_alignment
         yes_score = len(fact_terms.intersection(yes_terms))
         no_score = len(fact_terms.intersection(no_terms))
         macro_yes_score, macro_no_score = self._macro_policy_alignment_scores(rule_parse, text)
@@ -2624,6 +3448,181 @@ class AnalysisProcessor:
         if no_score > yes_score:
             return StanceEnum.NO
         return StanceEnum.NEUTRAL
+
+    def _political_forecast_alignment(
+        self,
+        rule_parse: RuleParse,
+        text: str,
+    ) -> StanceEnum | None:
+        question_text = getattr(rule_parse, "question_text", "") or ""
+        yes_condition = getattr(rule_parse, "yes_condition", "") or ""
+        question_context = f"{question_text} {yes_condition}"
+        if not self._is_political_forecast_question(question_context):
+            return None
+
+        lowered = self._expand_search_aliases(text).lower()
+        question_lowered = self._expand_search_aliases(question_context).lower()
+
+        yes_actor: str | None = None
+        no_actor: str | None = None
+        if "republican" in question_lowered or "gop" in question_lowered:
+            yes_actor = "republican"
+            no_actor = "democrat"
+        elif "democrat" in question_lowered:
+            yes_actor = "democrat"
+            no_actor = "republican"
+
+        if yes_actor is None:
+            if "impeach" in question_lowered or "impeachment" in question_lowered:
+                has_impeachment_anchor = "impeach" in lowered or "impeachment" in lowered
+                if has_impeachment_anchor and any(cue in lowered for cue in POLITICAL_FORECAST_NEGATIVE_CUES):
+                    return StanceEnum.NO
+                if has_impeachment_anchor and any(cue in lowered for cue in POLITICAL_FORECAST_POSITIVE_CUES):
+                    return StanceEnum.YES
+            return None
+
+        yes_actor_terms = self._political_actor_terms(yes_actor)
+        no_actor_terms = self._political_actor_terms(no_actor) if no_actor else []
+        yes_positive = self._actor_forecast_cue_match(
+            lowered,
+            actor_terms=yes_actor_terms,
+            cues=POLITICAL_FORECAST_POSITIVE_CUES,
+        )
+        yes_negative = self._actor_forecast_cue_match(
+            lowered,
+            actor_terms=yes_actor_terms,
+            cues=POLITICAL_FORECAST_NEGATIVE_CUES,
+        )
+        no_positive = self._actor_forecast_cue_match(
+            lowered,
+            actor_terms=no_actor_terms,
+            cues=POLITICAL_FORECAST_POSITIVE_CUES,
+        )
+        no_negative = self._actor_forecast_cue_match(
+            lowered,
+            actor_terms=no_actor_terms,
+            cues=POLITICAL_FORECAST_NEGATIVE_CUES,
+        )
+
+        if yes_positive and not no_positive and not yes_negative:
+            return StanceEnum.YES
+        if yes_negative and not no_negative:
+            return StanceEnum.NO
+        if no_positive and not yes_positive and not no_negative:
+            return StanceEnum.NO
+        if no_negative and not yes_negative:
+            return StanceEnum.YES
+        return None
+
+    @staticmethod
+    def _political_actor_terms(actor: str) -> list[str]:
+        if actor == "republican":
+            return ["republican", "republicans", "gop"]
+        if actor == "democrat":
+            return ["democrat", "democrats", "democratic"]
+        return [actor]
+
+    @staticmethod
+    def _actor_forecast_cue_match(
+        text: str,
+        *,
+        actor_terms: list[str],
+        cues: set[str],
+    ) -> bool:
+        if not actor_terms:
+            return False
+        for actor in actor_terms:
+            escaped_actor = re.escape(actor)
+            for cue in cues:
+                escaped_cue = re.escape(cue)
+                if re.search(rf"\b{escaped_actor}\b[^.!?;,]{{0,90}}\b{escaped_cue}\b", text):
+                    return True
+                if re.search(rf"\b{escaped_cue}\b[^.!?;,]{{0,45}}\b{escaped_actor}\b", text):
+                    return True
+        return False
+
+    def _generic_manual_alignment(
+        self,
+        *,
+        rule_parse: RuleParse,
+        fact_terms: set[str],
+        yes_terms: set[str],
+        no_terms: set[str],
+        text: str,
+    ) -> StanceEnum | None:
+        lowered = self._expand_search_aliases(text).lower()
+        has_context_anchor = any(cue in lowered for cue in GENERIC_MANUAL_CONTEXT_CUES)
+        has_entity_anchor = any(
+            self._expand_search_aliases(entity).lower() in lowered
+            for entity in rule_parse.entity_names
+        )
+        if not has_context_anchor and not has_entity_anchor:
+            return StanceEnum.NEUTRAL
+
+        yes_score = 0
+        no_score = 0
+        action = (rule_parse.action or "").lower()
+        if action in {"restart", "resume", "reignite"}:
+            yes_score += sum(1 for cue in GENERIC_MANUAL_RESTART_YES_CUES if cue in lowered)
+            no_score += sum(1 for cue in GENERIC_MANUAL_RESTART_NO_CUES if cue in lowered)
+        else:
+            appointment_alignment = self._generic_manual_appointment_alignment(rule_parse, lowered)
+            if appointment_alignment is not None:
+                return appointment_alignment
+            shared_terms = yes_terms.intersection(no_terms)
+            yes_unique_terms = {
+                term
+                for term in yes_terms.difference(shared_terms)
+                if term not in {"happen", "happens", "true", "not", "false"}
+            }
+            no_unique_terms = {
+                term
+                for term in no_terms.difference(shared_terms)
+                if term not in {"happen", "happens", "true", "not", "false"}
+            }
+            yes_score += len(fact_terms.intersection(yes_unique_terms))
+            no_score += len(fact_terms.intersection(no_unique_terms))
+            if action and action != "resolve" and action in lowered:
+                yes_score += 1
+            if any(keyword in lowered for keyword in POSITIVE_KEYWORDS):
+                yes_score += 1
+            if any(keyword in lowered for keyword in NEGATIVE_KEYWORDS):
+                no_score += 1
+
+        if yes_score > no_score:
+            return StanceEnum.YES
+        if no_score > yes_score:
+            return StanceEnum.NO
+        return StanceEnum.NEUTRAL
+
+    @classmethod
+    def _generic_manual_appointment_alignment(
+        cls,
+        rule_parse: RuleParse,
+        lowered_text: str,
+    ) -> StanceEnum | None:
+        question_context = (
+            f"{getattr(rule_parse, 'question_text', '')} "
+            f"{getattr(rule_parse, 'yes_condition', '')}"
+        ).lower()
+        if not any(cue in question_context for cue in GENERIC_MANUAL_APPOINTMENT_QUESTION_CUES):
+            return None
+
+        entity_anchors = [
+            cls._expand_search_aliases(entity).lower()
+            for entity in getattr(rule_parse, "entity_names", [])
+            if entity
+        ]
+        if entity_anchors and not any(anchor in lowered_text for anchor in entity_anchors):
+            return StanceEnum.NEUTRAL
+
+        yes_score = sum(1 for cue in GENERIC_MANUAL_APPOINTMENT_YES_CUES if cue in lowered_text)
+        no_score = sum(1 for cue in GENERIC_MANUAL_APPOINTMENT_NO_CUES if cue in lowered_text)
+        if yes_score > no_score:
+            return StanceEnum.YES
+        if no_score > yes_score:
+            return StanceEnum.NO
+        return None
 
     @classmethod
     def _macro_policy_alignment_scores(
@@ -2724,6 +3723,29 @@ class AnalysisProcessor:
             keyword in lowered
             for keyword in {"strike down", "block", "invalidate", "rule against", "unconstitutional"}
         )
+
+    @staticmethod
+    def _contains_phrase(text: str, phrase: str) -> bool:
+        pattern = r"(?<![a-z0-9])" + r"\s+".join(
+            re.escape(part) for part in phrase.lower().split()
+        ) + r"(?![a-z0-9])"
+        return re.search(pattern, text.lower()) is not None
+
+    @classmethod
+    def _contains_any_phrase(cls, text: str, phrases: set[str]) -> bool:
+        return any(cls._contains_phrase(text, phrase) for phrase in phrases)
+
+    @classmethod
+    def _legal_merits_alignment(cls, rule_parse: RuleParse, text: str) -> StanceEnum | None:
+        yes_favors_blocking_or_striking = cls._yes_condition_favors_negative_legal_outcome(rule_parse)
+        negative_for_challenged_action = cls._contains_any_phrase(text, LEGAL_MERITS_YES)
+        positive_for_challenged_action = cls._contains_any_phrase(text, LEGAL_MERITS_NO)
+
+        if negative_for_challenged_action:
+            return StanceEnum.YES if yes_favors_blocking_or_striking else StanceEnum.NO
+        if positive_for_challenged_action:
+            return StanceEnum.NO if yes_favors_blocking_or_striking else StanceEnum.YES
+        return None
 
     def _freshness_multiplier(self, source: Source) -> float:
         reference_time = source.published_at or source.fetched_at
@@ -2878,6 +3900,12 @@ class AnalysisProcessor:
                 "Prioritize central bank officials, major macro reporters, economists, and "
                 "policy specialists with credible track records."
             )
+        if AnalysisProcessor._is_political_forecast_question(rule_parse.question_text):
+            return (
+                "Prioritize pollsters, election forecasters, political data journalists, campaign beat "
+                "reporters, and credible district or chamber-control analysts. Treat broad partisan "
+                "cheering as crowd flow only, but do capture whether many smaller accounts are converging early."
+            )
         return (
             "Use the most conservative trust threshold. Prefer institutional or clearly domain-expert "
             "accounts and avoid overclaiming broad X consensus."
@@ -2952,6 +3980,8 @@ class AnalysisProcessor:
             return TemplateKey.LEGAL_CASE
         if any(keyword in lowered for keyword in {"fed", "fomc", "rate cut", "inflation", "jobs report"}):
             return TemplateKey.MACRO_POLICY
+        if AnalysisProcessor._is_political_forecast_question(text):
+            return TemplateKey.NARRATIVE_MANUAL
         if any(
             keyword in lowered
             for keyword in {
@@ -2972,6 +4002,13 @@ class AnalysisProcessor:
         ):
             return TemplateKey.NARRATIVE_MANUAL
         return TemplateKey.GENERIC_MANUAL
+
+    @staticmethod
+    def _is_political_forecast_question(text: str | None) -> bool:
+        if not text:
+            return False
+        lowered = text.lower()
+        return any(keyword in lowered for keyword in POLITICAL_FORECAST_KEYWORDS)
 
     @staticmethod
     def _looks_binary(text: str) -> bool:
@@ -3196,6 +4233,8 @@ class AnalysisProcessor:
             "announce",
             "file",
             "rule",
+            "restart",
+            "resume",
             "cut",
             "win",
             "side with",

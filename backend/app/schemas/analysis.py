@@ -323,6 +323,12 @@ class SocialModifierResponse(BaseModel):
     consensus_strength: ConsensusStrengthEnum | None = None
     narrative_phase: NarrativePhaseEnum | None = None
     summary: str | None = None
+    broad_posts_sampled: int | None = None
+    trusted_accounts_count: int | None = None
+    crowd_signal_direction: ConsensusLabelEnum | None = None
+    crowd_signal_evidence: float = 0.0
+    crowd_signal_uncertainty: float = 0.0
+    crowd_signal_reason: str | None = None
 
 
 class FactorContributionResponse(BaseModel):
@@ -355,6 +361,7 @@ class ProbabilityMathResponse(BaseModel):
     non_social_evidence: float
     raw_social_evidence: float
     capped_social_evidence: float
+    crowd_signal_evidence: float = 0.0
     total_evidence: float
     p_hat: float | None = None
 

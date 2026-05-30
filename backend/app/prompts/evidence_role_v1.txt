@@ -11,6 +11,7 @@ Rules:
 - commentary means analysis or interpretation that may be relevant but is not itself an outcome fact
 - timing means scheduling or temporal context only
 - sentiment means broad social or narrative temperature, not proposition truth
+- for election and political forecast questions, reputable polls, forecast models, and expert/data-journalist projections that directly compare the YES/NO outcome should be treated as directional commentary or direct support/contradiction, not discarded merely because the event has not resolved yet
 
 Context:
 {{context}}

@@ -26,6 +26,12 @@ const templateOptions: Array<{ value: TemplateSelection; label: string }> = [
   { value: "generic_manual", label: "Generic manual" },
 ];
 
+const customClaimExamples = [
+  "Will Trump be impeached after the 2026 midterms?",
+  "Will Democrats win both chambers of Congress in the 2026 midterms?",
+  "Will Democrats win control of the Senate in the 2026 midterms?",
+];
+
 function defaultLiveXValue(templateRequested: TemplateSelection) {
   return templateRequested !== "official_event";
 }
@@ -130,19 +136,19 @@ export function ManualAnalysisForm() {
               <legend className="text-sm font-semibold text-ink">Input type</legend>
               <div className="mt-2 grid gap-2 rounded-lg border border-black/10 bg-white/45 p-1 sm:grid-cols-3">
                 {inputModeOptions.map(({ value, label }) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={inputMode === value}
-                  onClick={() => setInputMode(value as typeof inputMode)}
-                  className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
-                    inputMode === value
-                      ? "bg-ink text-white shadow-sm"
-                      : "text-ink/62 hover:bg-white/80 hover:text-ink"
-                  }`}
-                >
-                  {label}
-                </button>
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={inputMode === value}
+                    onClick={() => setInputMode(value as typeof inputMode)}
+                    className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                      inputMode === value
+                        ? "bg-ink text-white shadow-sm"
+                        : "text-ink/62 hover:bg-white/80 hover:text-ink"
+                    }`}
+                  >
+                    {label}
+                  </button>
                 ))}
               </div>
             </fieldset>
@@ -167,6 +173,23 @@ export function ManualAnalysisForm() {
                 <p>{helperText}</p>
                 <p className="text-xs uppercase tracking-[0.14em] text-ink/40">{primaryValue.trim().length} chars</p>
               </div>
+              {inputMode === "custom_claim" ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {customClaimExamples.map((example) => (
+                    <button
+                      key={example}
+                      type="button"
+                      onClick={() => {
+                        setPrimaryValue(example);
+                        setTemplateRequested("auto");
+                      }}
+                      className="quiet-action max-w-full justify-start whitespace-normal break-words text-left leading-5 normal-case tracking-normal"
+                    >
+                      {example}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </label>
           </section>
 

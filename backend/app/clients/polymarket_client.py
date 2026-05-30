@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -47,6 +48,50 @@ class PolymarketClient:
             return None
         return self._fetch_market(f"/markets/slug/{slug}")
 
+    def search_markets_for_claim(self, query: str, *, limit: int = 8) -> list[ResolvedMarketRecord]:
+        if not self.enabled or not query.strip():
+            return []
+        try:
+            with httpx.Client(timeout=20.0) as client:
+                response = client.get(
+                    f"{self.base_url}/public-search",
+                    params={"q": query, "limit": limit},
+                )
+                response.raise_for_status()
+        except httpx.HTTPError:
+            return []
+
+        payload = response.json()
+        candidates: list[ResolvedMarketRecord] = []
+
+        for market_payload in payload.get("markets", []) if isinstance(payload, dict) else []:
+            if not isinstance(market_payload, dict):
+                continue
+            record = self._record_from_payload(market_payload)
+            if record.polymarket_id:
+                candidates.append(record)
+
+        for event_payload in payload.get("events", []) if isinstance(payload, dict) else []:
+            if not isinstance(event_payload, dict):
+                continue
+            event_slug = event_payload.get("slug")
+            event_title = event_payload.get("title")
+            markets = event_payload.get("markets")
+            if not isinstance(markets, list):
+                continue
+            for market_payload in markets:
+                if not isinstance(market_payload, dict):
+                    continue
+                record = self._record_from_payload(
+                    market_payload,
+                    event_slug=str(event_slug) if event_slug else None,
+                    event_title=str(event_title) if event_title else None,
+                )
+                if record.polymarket_id:
+                    candidates.append(record)
+
+        return candidates[:limit]
+
     def _fetch_market(self, path: str) -> ResolvedMarketRecord | None:
         try:
             with httpx.Client(timeout=20.0) as client:
@@ -55,19 +100,33 @@ class PolymarketClient:
         except httpx.HTTPError:
             return None
 
-        payload = response.json()
+        return self._record_from_payload(response.json())
+
+    def _record_from_payload(
+        self,
+        payload: dict[str, Any],
+        *,
+        event_slug: str | None = None,
+        event_title: str | None = None,
+    ) -> ResolvedMarketRecord:
         outcomes = self._coerce_json_list(payload.get("outcomes"))
         outcome_prices = self._coerce_json_list(payload.get("outcomePrices"))
         yes_price, no_price = self._resolve_binary_prices(outcomes, outcome_prices)
         best_bid = self._coerce_float(payload.get("bestBid"))
         best_ask = self._coerce_float(payload.get("bestAsk"))
+        slug = event_slug or payload.get("slug")
+        status = "closed" if payload.get("closed") else "active" if payload.get("active") else None
+
+        description = payload.get("description")
+        if event_title and description:
+            description = f"{event_title}\n\n{description}"
 
         return ResolvedMarketRecord(
             polymarket_id=str(payload.get("id") or ""),
             title=payload.get("question") or "Untitled Polymarket market",
-            url=f"https://polymarket.com/event/{payload.get('slug')}" if payload.get("slug") else None,
+            url=f"https://polymarket.com/event/{slug}" if slug else None,
             rules_text=payload.get("resolutionSource"),
-            description=payload.get("description"),
+            description=description,
             yes_bid=best_bid if best_bid is not None else yes_price,
             yes_ask=best_ask if best_ask is not None else yes_price,
             no_bid=(1 - best_ask) if best_ask is not None else no_price,
@@ -80,7 +139,7 @@ class PolymarketClient:
                 else None
             ),
             expiry_at=self._coerce_datetime(payload.get("endDateIso") or payload.get("endDate")),
-            status="closed" if payload.get("closed") else "active",
+            status=status,
         )
 
     @staticmethod

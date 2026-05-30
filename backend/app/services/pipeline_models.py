@@ -72,6 +72,17 @@ class FactorMappingDraft(BaseModel):
     rationale: str | None = None
 
 
+class EvidenceAdjudicationDraft(BaseModel):
+    stance: StanceEnum
+    strength: StrengthEnum
+    evidence_role: EvidenceRoleEnum
+    used_in_scoring: bool
+    relevance_score: float = Field(ge=0.0, le=1.0)
+    reliability_score: float = Field(ge=0.0, le=1.0)
+    directional_score: float = Field(ge=-1.0, le=1.0)
+    rationale: str
+
+
 class BriefDraft(BaseModel):
     final_summary: str
     why_wrong_summary: str
