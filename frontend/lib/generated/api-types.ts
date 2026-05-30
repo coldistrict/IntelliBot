@@ -772,6 +772,11 @@ export interface components {
         ProbabilityMathResponse: {
             /** Capped Social Evidence */
             capped_social_evidence: number;
+            /**
+             * Crowd Signal Evidence
+             * @default 0
+             */
+            crowd_signal_evidence: number;
             /** Non Social Evidence */
             non_social_evidence: number;
             /** Numeric Estimate Available */
@@ -960,11 +965,28 @@ export interface components {
         };
         /** SocialModifierResponse */
         SocialModifierResponse: {
+            /** Broad Posts Sampled */
+            broad_posts_sampled?: number | null;
             consensus_label?: components["schemas"]["ConsensusLabelEnum"] | null;
             consensus_strength?: components["schemas"]["ConsensusStrengthEnum"] | null;
+            crowd_signal_direction?: components["schemas"]["ConsensusLabelEnum"] | null;
+            /**
+             * Crowd Signal Evidence
+             * @default 0
+             */
+            crowd_signal_evidence: number;
+            /** Crowd Signal Reason */
+            crowd_signal_reason?: string | null;
+            /**
+             * Crowd Signal Uncertainty
+             * @default 0
+             */
+            crowd_signal_uncertainty: number;
             narrative_phase?: components["schemas"]["NarrativePhaseEnum"] | null;
             /** Summary */
             summary?: string | null;
+            /** Trusted Accounts Count */
+            trusted_accounts_count?: number | null;
         };
         /**
          * SourceKindEnum

@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ManualAnalysisForm } from "@/components/analysis/manual-analysis-form";
@@ -21,5 +21,15 @@ describe("ManualAnalysisForm", () => {
     expect(
       screen.getByText(/let grok handle live x discovery instead of hand-curating posts/i),
     ).toBeInTheDocument();
+  });
+
+  it("can fill a political manual-analysis example", () => {
+    render(<ManualAnalysisForm />);
+
+    fireEvent.click(screen.getByRole("button", { name: /democrats win control of the senate/i }));
+
+    expect(screen.getByLabelText(/primary input/i)).toHaveValue(
+      "Will Democrats win control of the Senate in the 2026 midterms?",
+    );
   });
 });

@@ -12,7 +12,6 @@ from app.models.enums import (
     ModeEnum,
     RequestStatusEnum,
     SourceKindEnum,
-    SourceTierEnum,
     TemplateKey,
 )
 from app.schemas.analysis import (
@@ -47,8 +46,10 @@ from app.services.analysis_dispatch import AnalysisDispatcher, get_analysis_disp
 from app.services.analysis_presentation import build_analysis_presentation
 from app.services.analysis_pipeline import AnalysisProcessor, get_analysis_processor
 from app.services.analysis_progress import build_progress_snapshot, initial_progress_payload
+from app.services.analysis_social_trust import social_metadata_is_trusted
 
 router = APIRouter(prefix="/analyses")
+ACTIVE_REQUEST_STATUSES = {RequestStatusEnum.QUEUED, RequestStatusEnum.RUNNING}
 
 
 def _latest_rule_parse(request: AnalysisRequest) -> RuleParse | None:
@@ -63,9 +64,53 @@ def _latest_run(request: AnalysisRequest) -> AnalysisRun | None:
     return max(request.analysis_runs, key=lambda item: item.created_at)
 
 
-def _build_summary(request: AnalysisRequest) -> AnalysisRequestSummary:
+def _latest_completed_run(request: AnalysisRequest) -> AnalysisRun | None:
+    completed_runs = [
+        run
+        for run in request.analysis_runs
+        if run.final_summary
+        or run.p_hat is not None
+        or run.recommendation is not None
+        or bool(run.factors)
+    ]
+    if not completed_runs:
+        return None
+    return max(completed_runs, key=lambda item: item.created_at)
+
+
+def _artifact_belongs_to_current_attempt(
+    request: AnalysisRequest,
+    artifact_created_at: datetime,
+) -> bool:
+    if request.started_at is None:
+        return False
+    return artifact_created_at >= request.started_at
+
+
+def _current_rule_parse(request: AnalysisRequest) -> RuleParse | None:
+    latest_rule_parse = _latest_rule_parse(request)
+    if latest_rule_parse is None:
+        return None
+    if request.status == RequestStatusEnum.COMPLETE:
+        return latest_rule_parse
+    if _artifact_belongs_to_current_attempt(request, latest_rule_parse.created_at):
+        return latest_rule_parse
+    return None
+
+
+def _current_run(request: AnalysisRequest) -> AnalysisRun | None:
     latest_run = _latest_run(request)
-    active_run = latest_run if request.status == RequestStatusEnum.COMPLETE else None
+    if latest_run is None:
+        return None
+    if request.status == RequestStatusEnum.COMPLETE:
+        return _latest_completed_run(request) or latest_run
+    if _artifact_belongs_to_current_attempt(request, latest_run.created_at):
+        return latest_run
+    return None
+
+
+def _build_summary(request: AnalysisRequest) -> AnalysisRequestSummary:
+    active_run = _current_run(request) if request.status == RequestStatusEnum.COMPLETE else None
     review_count = len(active_run.reviews) if active_run else 0
     progress = build_progress_snapshot(request)
     display_summary = build_display_summary(request, analysis_run=active_run)
@@ -113,11 +158,12 @@ def _queue_request(
     request: AnalysisRequest,
     processor: AnalysisProcessor,
     dispatcher: AnalysisDispatcher,
+    pre_reserved: bool = False,
 ) -> AnalysisQueuedResponse:
     session.add(request)
     session.commit()
     session.refresh(request)
-    dispatcher.dispatch(processor, request.id)
+    dispatcher.dispatch(processor, request.id, pre_reserved=pre_reserved)
     return AnalysisQueuedResponse(request=_build_summary(request))
 
 
@@ -138,10 +184,7 @@ def _build_progress_presentation(
                 progress=progress,
                 has_rule_parse=latest_rule_parse is not None,
                 has_sources=bool(latest_sources),
-                has_social_sources=any(
-                    source.source_kind in {SourceKindEnum.LIVE_SOCIAL, SourceKindEnum.MANUAL_SOCIAL}
-                    for source in latest_sources
-                ),
+                has_social_sources=bool(latest_run and latest_run.social_intel_summary),
                 has_factors=bool(latest_factors),
                 has_analysis_run=latest_run is not None,
                 has_final_summary=bool(latest_run and latest_run.final_summary),
@@ -247,8 +290,8 @@ def get_analysis_detail(
     if request is None:
         raise HTTPException(status_code=404, detail="Analysis request not found.")
 
-    latest_rule_parse = _latest_rule_parse(request)
-    latest_run = _latest_run(request)
+    latest_rule_parse = _current_rule_parse(request)
+    latest_run = _current_run(request)
     progress = build_progress_snapshot(request)
     trusted_social_sources = []
     if latest_run:
@@ -256,9 +299,19 @@ def get_analysis_detail(
             SourceResponse.model_validate(source)
             for source in latest_run.sources
             if source.source_kind == SourceKindEnum.LIVE_SOCIAL
-            and source.source_tier in {SourceTierEnum.OFFICIAL_SOCIAL, SourceTierEnum.HIGH_TRUST_SOCIAL}
+            and social_metadata_is_trusted(
+                source_tier=source.source_tier,
+                metadata=source.metadata_json,
+            )
         ]
     recommendation = latest_run.recommendation if latest_run else None
+    social_intel_summary = (
+        SocialIntelSummaryResponse.model_validate(latest_run.social_intel_summary).model_copy(
+            update={"trusted_accounts_count": len(trusted_social_sources)}
+        )
+        if latest_run and latest_run.social_intel_summary
+        else None
+    )
     display_summary = build_display_summary(
         request,
         rule_parse=latest_rule_parse,
@@ -277,7 +330,7 @@ def get_analysis_detail(
             factors=latest_run.factors if latest_run else [],
             social_intel_summary=latest_run.social_intel_summary if latest_run else None,
         )
-        if latest_run
+        if latest_run and latest_run.factors
         else None
     )
     presentation = build_analysis_presentation(
@@ -307,11 +360,7 @@ def get_analysis_detail(
         presentation=AnalysisPresentationResponse.model_validate(presentation),
         display_summary=display_summary,
         last_updated_at=request.updated_at,
-        social_intel_summary=(
-            SocialIntelSummaryResponse.model_validate(latest_run.social_intel_summary)
-            if latest_run and latest_run.social_intel_summary
-            else None
-        ),
+        social_intel_summary=social_intel_summary,
         sources=(
             [SourceResponse.model_validate(source) for source in latest_run.sources]
             if latest_run
@@ -364,14 +413,15 @@ def get_analysis_progress(
             selectinload(AnalysisRequest.rule_parses),
             selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.reviews),
             selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.sources),
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.social_intel_summary),
             selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.factors),
         )
     )
     if request is None:
         raise HTTPException(status_code=404, detail="Analysis request not found.")
 
-    latest_rule_parse = _latest_rule_parse(request)
-    latest_run = _latest_run(request)
+    latest_rule_parse = _current_rule_parse(request)
+    latest_run = _current_run(request)
     progress = build_progress_snapshot(request)
 
     return AnalysisProgressPollResponse(
@@ -400,7 +450,13 @@ def review_analysis(
     if request is None:
         raise HTTPException(status_code=404, detail="Analysis request not found.")
 
-    latest_run = _latest_run(request)
+    if request.status != RequestStatusEnum.COMPLETE:
+        raise HTTPException(
+            status_code=409,
+            detail="Analysis must be complete before it can be reviewed.",
+        )
+
+    latest_run = _current_run(request)
     if latest_run is None:
         raise HTTPException(
             status_code=409,
@@ -429,11 +485,26 @@ def rerun_analysis(
     request = session.get(AnalysisRequest, analysis_id)
     if request is None:
         raise HTTPException(status_code=404, detail="Analysis request not found.")
+    if request.status in ACTIVE_REQUEST_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail="Analysis is already queued or running.",
+        )
+    if not dispatcher.reserve(request.id):
+        raise HTTPException(
+            status_code=409,
+            detail="Analysis is already queued or running.",
+        )
 
-    reset_request_to_queue(request)
-    return _queue_request(
-        session=session,
-        request=request,
-        processor=processor,
-        dispatcher=dispatcher,
-    )
+    try:
+        reset_request_to_queue(request)
+        return _queue_request(
+            session=session,
+            request=request,
+            processor=processor,
+            dispatcher=dispatcher,
+            pre_reserved=True,
+        )
+    except Exception:
+        dispatcher.release(request.id)
+        raise

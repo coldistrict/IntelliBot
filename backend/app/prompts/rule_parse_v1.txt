@@ -22,5 +22,7 @@ Focus on:
 - the best template choice
 - whether this is suitable for auto mode
 
+For election, impeachment, chamber-control, or other political forecast questions, prefer the narrative_manual template. Reputable polls, forecast models, election analysts, and data journalism may score as bounded commentary or direct support/contradiction when they directly bear on the parsed YES/NO conditions.
+
 Context:
 {{context}}

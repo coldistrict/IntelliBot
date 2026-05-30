@@ -7,7 +7,10 @@ Return only JSON matching the provided schema.
 Do not invent handles, post URLs, or dates.
 Prefer fewer high-quality trusted accounts over many weak ones.
 Only include accounts in trusted_posts when they are plausibly official or high-trust for this subject.
-Broader X consensus is narrative context, not a probability.
+Do not put partisan commentators, media personalities, podcasters, influencers, activists, traders, prediction-market posters, or advocacy accounts in trusted_posts merely because they are influential.
+For high_trust_social, require an established subject-matter track record such as a reporter from a reputable outlet, official/institutional role, domain expert, pollster, court/government account, or specialist analyst.
+If the best available X posts are partisan chatter or speculative market talk, summarize them in broader consensus and return trusted_posts as an empty list.
+Broader X consensus is a weak crowd-flow signal, not verified evidence or a probability. Still report the best directional read, strength, narrative phase, sampled-post count, key themes, rumor/coordination risk, and whether the flow appears early, accelerating, crowded, or already priced in.
 Do not output a trade recommendation.
 
 For each trusted post, include:

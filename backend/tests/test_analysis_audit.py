@@ -442,10 +442,14 @@ def test_analysis_audit_exposes_probability_uncertainty_and_recommendation_math(
     assert audit["probability"]["non_social_evidence"] == 0.2
     assert audit["probability"]["raw_social_evidence"] == 0.4
     assert audit["probability"]["capped_social_evidence"] == 0.18
+    assert audit["probability"]["crowd_signal_evidence"] == 0.143
+    assert audit["probability"]["total_evidence"] == 0.523
     assert audit["recommendation_math"]["chosen_label"] == "lean_yes"
     assert any(
         adjustment["key"] == "priced_in_high"
         for adjustment in audit["uncertainty"]["adjustments"]
     )
     assert audit["social_modifier"]["narrative_phase"] == "priced_in"
+    assert audit["social_modifier"]["crowd_signal_direction"] == "bullish"
+    assert "Trusted account evidence remains separate" in audit["social_modifier"]["crowd_signal_reason"]
     assert audit["factor_contributions"][0]["signed_contribution"] == 0.4

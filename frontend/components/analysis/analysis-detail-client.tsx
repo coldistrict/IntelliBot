@@ -88,12 +88,41 @@ function humanizeLabel(value: string | null | undefined) {
   return value.replaceAll("_", " ");
 }
 
+function articleForPhrase(value: string) {
+  return /^[aeiou]/i.test(value.trim()) ? "an" : "a";
+}
+
 function sentenceCaseLabel(value: string | null | undefined) {
   const humanized = humanizeLabel(value);
   if (!humanized) {
     return "Unavailable";
   }
   return humanized.charAt(0).toUpperCase() + humanized.slice(1);
+}
+
+function decisionHeadlineFromRead(
+  pHat: number | null | undefined,
+  qualitativeLabel: string | null | undefined,
+) {
+  if (pHat !== null && pHat !== undefined) {
+    if (pHat > 0.5) {
+      return "Most likely: YES";
+    }
+    if (pHat < 0.5) {
+      return "Most likely: NO";
+    }
+    return "Near coin flip";
+  }
+  if (qualitativeLabel === "leans_yes") {
+    return "Most likely: YES";
+  }
+  if (qualitativeLabel === "leans_no") {
+    return "Most likely: NO";
+  }
+  if (qualitativeLabel === "mixed") {
+    return "Near coin flip";
+  }
+  return "No directional read yet";
 }
 
 function formatCount(value: number, singular: string, plural = `${singular}s`) {
@@ -124,6 +153,11 @@ function sourceMetaString(source: Source, key: string): string | null {
 function sourceMetaNumber(source: Source, key: string): number | null {
   const value = sourceMeta(source, key);
   return typeof value === "number" ? value : null;
+}
+
+function normalizeSocialHandle(value: string | null): string | null {
+  const normalized = value?.replace(/^@+/, "").trim();
+  return normalized || null;
 }
 
 function scrollToDetailSection(id: string) {
@@ -176,7 +210,7 @@ function SocialTimelineCard({ source }: { source: Source }) {
   const displayName = sourceMetaString(source, "display_name") ?? source.title ?? "Trusted account";
   const trustReason = sourceMetaString(source, "trust_reason");
   const relevanceReason = sourceMetaString(source, "relevance_reason");
-  const handle = sourceMetaString(source, "handle");
+  const handle = normalizeSocialHandle(sourceMetaString(source, "handle"));
   const trustConfidence = sourceMetaNumber(source, "trust_confidence");
 
   return (
@@ -217,6 +251,14 @@ function SocialConsensusSnapshot({ summary }: { summary: SocialIntelSummary }) {
   const consensusStrength = humanizeLabel(summary.consensus_strength);
   const narrativePhase = humanizeLabel(summary.narrative_phase);
   const themes = summary.key_themes ?? [];
+  const crowdTreatment =
+    summary.broad_posts_sampled <= 0
+      ? "No crowd signal"
+      : summary.consensus_label === "bullish"
+        ? "Capped YES nudge"
+        : summary.consensus_label === "bearish"
+          ? "Capped NO nudge"
+          : "Uncertainty only";
 
   return (
     <article className="rounded-lg border border-black/8 bg-white/65 p-4">
@@ -225,12 +267,13 @@ function SocialConsensusSnapshot({ summary }: { summary: SocialIntelSummary }) {
         {consensusLabel} with {consensusStrength} conviction
       </p>
       <p className="mt-2 max-w-4xl text-sm leading-6 text-ink/60">
-        Broader X discussion currently reads as {consensusLabel} with {consensusStrength} conviction in an{" "}
+        Broader X discussion currently reads as {consensusLabel} with {consensusStrength} conviction in{" "}
+        {articleForPhrase(narrativePhase)}{" "}
         {narrativePhase} phase.
       </p>
       <p className="mt-3 max-w-4xl text-sm leading-6 text-ink/66">{summary.summary}</p>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="border-l border-black/10 pl-3">
           <p className="section-label">Consensus</p>
           <p className="mt-2 text-sm font-semibold capitalize text-ink">{consensusLabel}</p>
@@ -246,6 +289,10 @@ function SocialConsensusSnapshot({ summary }: { summary: SocialIntelSummary }) {
           <p className="mt-2 text-sm font-semibold text-ink">
             {formatCount(summary.trusted_accounts_count, "account")}
           </p>
+        </div>
+        <div className="border-l border-black/10 pl-3">
+          <p className="section-label">Crowd lane</p>
+          <p className="mt-2 text-sm font-semibold text-ink">{crowdTreatment}</p>
         </div>
       </div>
 
@@ -363,6 +410,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
     detail.latest_run?.p_hat !== null && detail.latest_run?.p_hat !== undefined;
   const qualitativeLabel = detail.latest_run?.qualitative_label ?? detail.request.qualitative_label ?? null;
   const lastUpdated = detail.last_updated_at ?? detail.progress.last_updated_at;
+  const displayedStartedAt = detail.request.started_at ?? detail.latest_run?.created_at ?? null;
   const whyYes = detail.presentation.brief_sections.why_yes ?? [];
   const whyNo = detail.presentation.brief_sections.why_no ?? [];
   const contextItems = detail.presentation.brief_sections.context ?? [];
@@ -374,27 +422,32 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
     detail.request.latest_recommendation_label ??
     null;
   const isAnalysisOnlyRecommendation = recommendationLabel === "analysis_only";
+  const decisionHeadline = decisionHeadlineFromRead(detail.latest_run?.p_hat, qualitativeLabel);
   const recommendationHeadline = isAnalysisOnlyRecommendation
-    ? "No trade recommendation"
+    ? decisionHeadline
     : sentenceCaseLabel(recommendationLabel ?? "pending");
   const recommendationNote = isAnalysisOnlyRecommendation
-    ? detail.market
-      ? detail.latest_run?.numeric_estimate_available === false
-        ? "The model withheld a trade call until the evidence gets stronger."
-        : "This run stayed research-only instead of making a price-based call."
-      : "No linked Polymarket market was available for a trade call."
+    ? hasPointEstimate
+      ? detail.market
+        ? "Trade edge is separate; this card shows the model's directional read."
+        : "No linked Polymarket market was available, so this is a decision read rather than an executable trade call."
+      : detail.market
+        ? "The model could not form a directional read from the available evidence yet."
+        : "No linked Polymarket market was available, and the available evidence did not form a directional read yet."
     : null;
-  const probabilityTitle = hasPointEstimate ? "YES probability" : hasProbabilityRange ? "Probability range" : "Probability";
+  const marketPrior = detail.latest_run?.market_mid_prob;
+  const hasMarketPrior = marketPrior !== null && marketPrior !== undefined;
+  const probabilityTitle = hasPointEstimate ? "Model YES read" : hasProbabilityRange ? "Probability range" : "Probability";
   const probabilityValue = hasPointEstimate
     ? formatPercent(detail.latest_run?.p_hat)
     : hasProbabilityRange
       ? `${formatPercent(detail.latest_run?.p_low)} - ${formatPercent(detail.latest_run?.p_high)}`
-      : "Withheld";
+      : "No estimate";
   const probabilityNote =
     !hasPointEstimate && !hasProbabilityRange && qualitativeLabel
       ? `Qualitative read: ${humanizeLabel(qualitativeLabel)}.`
       : null;
-  const modelNoteTitle = hasPointEstimate ? "NO probability" : hasProbabilityRange ? "Range note" : "Why withheld";
+  const modelNoteTitle = hasPointEstimate ? "NO probability" : hasProbabilityRange ? "Range note" : "Why no estimate";
   const openAudit = (focus?: AuditFocus) => {
     refreshDetail();
     setAuditFocus(focus ?? null);
@@ -434,7 +487,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
           <p className="mt-2 max-w-4xl text-sm leading-6 text-ink/58">{detail.presentation.status_note}</p>
           <div className="mt-4 flex flex-wrap gap-4 text-sm text-ink/54">
             <span>Last updated {formatDate(lastUpdated)}</span>
-            <span>Elapsed {formatElapsed(detail.request.started_at, detail.request.completed_at)}</span>
+            <span>Elapsed {formatElapsed(displayedStartedAt, detail.request.completed_at)}</span>
             {detail.progress.current_label ? <span>Current stage: {detail.progress.current_label}</span> : null}
           </div>
           {isRunning || isFailed ? (
@@ -453,7 +506,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
           ) : null}
         </section>
 
-        <section className="grid gap-3 md:grid-cols-4">
+        <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
           <Panel className="p-4">
             <p className="section-label">Recommendation</p>
             <p className="mt-3 text-lg font-semibold text-ink">
@@ -473,7 +526,18 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
             {probabilityNote ? <p className="mt-2 text-sm leading-6 text-ink/62">{probabilityNote}</p> : null}
           </Panel>
           <Panel className="p-4">
-            <p className="section-label">{modelNoteTitle}</p>
+            <p className="section-label">Polymarket prior</p>
+            <p className="mt-3 text-lg font-semibold text-ink">
+              {hasMarketPrior ? formatPercent(marketPrior) : "Not linked"}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-ink/62">
+              {hasMarketPrior
+                ? "YES midpoint before evidence adjustments."
+                : "The model read is analysis-only."}
+            </p>
+          </Panel>
+          <Panel className="p-4">
+            <p className="section-label">{hasPointEstimate ? "Model NO read" : modelNoteTitle}</p>
             {hasPointEstimate ? (
               <p className="mt-3 text-lg font-semibold text-ink">{formatPercent(noPointEstimate)}</p>
             ) : hasProbabilityRange ? (
@@ -724,10 +788,10 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
             <button
               type="button"
               onClick={handleRerun}
-              disabled={isRerunning}
+              disabled={isRerunning || isRunning}
               className="secondary-action w-full"
             >
-              {isRerunning ? "Rerunning..." : "Rerun analysis"}
+              {isRerunning ? "Rerunning..." : isRunning ? "Analysis running" : "Rerun analysis"}
             </button>
             <Link
               href="/history"

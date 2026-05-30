@@ -213,6 +213,10 @@ def build_progress_snapshot(request: AnalysisRequest) -> dict[str, Any]:
             }
         )
 
+    current_stage: str | None
+    current_label: str | None
+    current_note: str | None
+
     if request.status.value == "queued":
         current_stage = "queued"
         current_label = "Queued"
@@ -220,16 +224,13 @@ def build_progress_snapshot(request: AnalysisRequest) -> dict[str, Any]:
         percent_complete = 0
     else:
         current_stage = request.current_stage
-        current_label = (
-            STAGE_CONFIG_BY_KEY[current_stage]["label"]
-            if current_stage in STAGE_CONFIG_BY_KEY
-            else None
-        )
-        current_note = (
-            payload["stages"].get(current_stage, {}).get("note")
-            if current_stage in STAGE_CONFIG_BY_KEY
-            else request.error_message
-        )
+        if current_stage in STAGE_CONFIG_BY_KEY:
+            current_label = str(STAGE_CONFIG_BY_KEY[current_stage]["label"])
+            note_value = payload["stages"].get(current_stage, {}).get("note")
+            current_note = note_value if isinstance(note_value, str) else None
+        else:
+            current_label = None
+            current_note = request.error_message
         completed_count = sum(
             1
             for key in WORK_STAGE_KEYS

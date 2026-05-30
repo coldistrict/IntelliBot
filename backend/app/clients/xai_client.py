@@ -33,6 +33,26 @@ class XAIResponsesClient:
     def is_configured(self) -> bool:
         return self.enabled and bool(self.api_key) and bool(self.model)
 
+    def generate_structured(
+        self,
+        *,
+        session: Session,
+        task_name: str,
+        prompt_version: str,
+        system_prompt: str,
+        user_prompt: str,
+        schema_model: type[SchemaT],
+    ) -> SchemaT:
+        return self.generate_structured_with_tools(
+            session=session,
+            task_name=task_name,
+            prompt_version=prompt_version,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            schema_model=schema_model,
+            tools=[],
+        )
+
     def generate_structured_with_tools(
         self,
         *,

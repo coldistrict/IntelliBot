@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from functools import lru_cache
-from threading import Thread
+from threading import Lock, Thread
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
@@ -21,19 +21,55 @@ logger = logging.getLogger(__name__)
 class AnalysisDispatcher:
     def __init__(self, *, run_inline: bool = False) -> None:
         self.run_inline = run_inline
+        self._active_request_ids: set[int] = set()
+        self._lock = Lock()
 
-    def dispatch(self, processor: "AnalysisProcessor", request_id: int) -> None:
+    def reserve(self, request_id: int) -> bool:
+        with self._lock:
+            if request_id in self._active_request_ids:
+                return False
+            self._active_request_ids.add(request_id)
+            return True
+
+    def release(self, request_id: int) -> None:
+        with self._lock:
+            self._active_request_ids.discard(request_id)
+
+    def dispatch(
+        self,
+        processor: "AnalysisProcessor",
+        request_id: int,
+        *,
+        pre_reserved: bool = False,
+    ) -> bool:
+        if not pre_reserved and not self.reserve(request_id):
+            return False
+
         if self.run_inline:
-            processor.process_request(request_id)
-            return
+            try:
+                processor.process_request(request_id)
+            finally:
+                self.release(request_id)
+            return True
 
         thread = Thread(
-            target=processor.process_request,
-            args=(request_id,),
+            target=self._run_request,
+            args=(processor, request_id),
             name=f"analysis-request-{request_id}",
             daemon=True,
         )
-        thread.start()
+        try:
+            thread.start()
+        except Exception:
+            self.release(request_id)
+            raise
+        return True
+
+    def _run_request(self, processor: "AnalysisProcessor", request_id: int) -> None:
+        try:
+            processor.process_request(request_id)
+        finally:
+            self.release(request_id)
 
     def reconcile_stale_requests(
         self,
@@ -50,10 +86,12 @@ class AnalysisDispatcher:
             logger.exception("Unable to reconcile stale analysis requests during startup.")
             return []
 
+        dispatched_ids: list[int] = []
         for request_id in request_ids:
-            self.dispatch(processor, request_id)
+            if self.dispatch(processor, request_id):
+                dispatched_ids.append(request_id)
 
-        return request_ids
+        return dispatched_ids
 
 
 def reset_request_to_queue(request: AnalysisRequest) -> None:

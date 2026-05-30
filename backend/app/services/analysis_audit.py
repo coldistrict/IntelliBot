@@ -22,7 +22,12 @@ from app.models.enums import (
     StanceEnum,
 )
 from app.services.analysis_progress import build_progress_snapshot
-from app.services.analysis_scoring import BASE_UNCERTAINTY, MAX_SOCIAL_EVIDENCE, social_uncertainty_adjustment
+from app.services.analysis_scoring import (
+    BASE_UNCERTAINTY,
+    MAX_SOCIAL_EVIDENCE,
+    crowd_signal_modifier,
+    social_uncertainty_adjustment,
+)
 
 
 def _humanize(value: str | None) -> str | None:
@@ -89,8 +94,14 @@ def build_display_summary(
         question = rule_parse.question_text if rule_parse else request.input_text
         label = _humanize(recommendation.recommendation_label.value) or "analysis"
         confidence = _humanize(recommendation.confidence_label.value) or "unknown"
+        if analysis_run.p_hat > 0.5:
+            decision = "YES is more likely"
+        elif analysis_run.p_hat < 0.5:
+            decision = "NO is more likely"
+        else:
+            decision = "the market is close to a coin flip"
         summary = (
-            f"{question} currently screens at YES {_format_probability(analysis_run.p_hat)} / "
+            f"{question}: {decision}. Current model read is YES {_format_probability(analysis_run.p_hat)} / "
             f"NO {_format_probability(1 - analysis_run.p_hat)}. "
             f"The current posture is {label} with {confidence} confidence."
         )
@@ -182,7 +193,11 @@ def build_analysis_audit(
         key=lambda item: (not item["used_in_scoring"], -abs(item["signed_contribution"])),
     )
     capped_social_evidence = max(min(raw_social_evidence, MAX_SOCIAL_EVIDENCE), -MAX_SOCIAL_EVIDENCE)
-    total_evidence = max(min(non_social_evidence + capped_social_evidence, 2.5), -2.5)
+    crowd_signal = crowd_signal_modifier(social_intel_summary)
+    total_evidence = max(
+        min(non_social_evidence + capped_social_evidence + crowd_signal.evidence_delta, 2.5),
+        -2.5,
+    )
 
     prior_probability = analysis_run.market_mid_prob
     prior_logit = None
@@ -299,7 +314,7 @@ def build_analysis_audit(
                 "key": "social_narrative",
                 "label": "Social narrative modifier",
                 "amount": round(social_uncertainty, 4),
-                "note": "Live X consensus and narrative phase adjusted uncertainty.",
+                "note": crowd_signal.reason,
             }
         )
 
@@ -378,6 +393,12 @@ def build_analysis_audit(
                 "consensus_strength": social_intel_summary.consensus_strength,
                 "narrative_phase": social_intel_summary.narrative_phase,
                 "summary": social_intel_summary.summary,
+                "broad_posts_sampled": social_intel_summary.broad_posts_sampled,
+                "trusted_accounts_count": social_intel_summary.trusted_accounts_count,
+                "crowd_signal_direction": crowd_signal.direction,
+                "crowd_signal_evidence": crowd_signal.evidence_delta,
+                "crowd_signal_uncertainty": crowd_signal.uncertainty_delta,
+                "crowd_signal_reason": crowd_signal.reason,
             }
             if social_intel_summary
             else None
@@ -390,6 +411,7 @@ def build_analysis_audit(
             "non_social_evidence": round(non_social_evidence, 4),
             "raw_social_evidence": round(raw_social_evidence, 4),
             "capped_social_evidence": round(capped_social_evidence, 4),
+            "crowd_signal_evidence": crowd_signal.evidence_delta,
             "total_evidence": round(total_evidence, 4),
             "p_hat": analysis_run.p_hat,
         },

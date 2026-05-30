@@ -33,9 +33,11 @@ def _signed_weight(factor: Factor) -> float | None:
 
 
 def _evidence_item(*, factor: Factor, fact: FactClaim | None, source: Source | None) -> dict[str, Any]:
-    note_parts = []
-    if source and (source.title or source.domain):
-        note_parts.append(source.title or source.domain)
+    note_parts: list[str] = []
+    if source:
+        source_label = source.title or source.domain
+        if source_label:
+            note_parts.append(source_label)
     if factor.evidence_role:
         note_parts.append(_humanize(factor.evidence_role.value))
     if factor.used_in_scoring:
@@ -53,6 +55,17 @@ def _evidence_item(*, factor: Factor, fact: FactClaim | None, source: Source | N
         "source_title": source.title if source else None,
         "signed_weight": _signed_weight(factor),
     }
+
+
+def _source_for_factor(
+    factor: Factor,
+    fact_lookup: dict[int, FactClaim],
+    source_lookup: dict[int, Source],
+) -> Source | None:
+    fact = fact_lookup.get(factor.fact_claim_id)
+    if fact is None:
+        return None
+    return source_lookup.get(fact.source_id)
 
 
 def build_analysis_presentation(
@@ -80,9 +93,7 @@ def build_analysis_presentation(
         _evidence_item(
             factor=factor,
             fact=fact_lookup.get(factor.fact_claim_id),
-            source=source_lookup.get(fact_lookup.get(factor.fact_claim_id).source_id)
-            if fact_lookup.get(factor.fact_claim_id)
-            else None,
+            source=_source_for_factor(factor, fact_lookup, source_lookup),
         )
         for factor in factors
         if factor.used_in_scoring and factor.stance == StanceEnum.YES
@@ -91,9 +102,7 @@ def build_analysis_presentation(
         _evidence_item(
             factor=factor,
             fact=fact_lookup.get(factor.fact_claim_id),
-            source=source_lookup.get(fact_lookup.get(factor.fact_claim_id).source_id)
-            if fact_lookup.get(factor.fact_claim_id)
-            else None,
+            source=_source_for_factor(factor, fact_lookup, source_lookup),
         )
         for factor in factors
         if factor.used_in_scoring and factor.stance == StanceEnum.NO
@@ -102,9 +111,7 @@ def build_analysis_presentation(
         _evidence_item(
             factor=factor,
             fact=fact_lookup.get(factor.fact_claim_id),
-            source=source_lookup.get(fact_lookup.get(factor.fact_claim_id).source_id)
-            if fact_lookup.get(factor.fact_claim_id)
-            else None,
+            source=_source_for_factor(factor, fact_lookup, source_lookup),
         )
         for factor in factors
         if not factor.used_in_scoring
@@ -164,9 +171,7 @@ def build_analysis_presentation(
             progress=progress,
             has_rule_parse=rule_parse is not None,
             has_sources=bool(sources),
-            has_social_sources=any(
-                source.source_kind.value in {"live_social", "manual_social"} for source in sources
-            ),
+            has_social_sources=bool(analysis_run and analysis_run.social_intel_summary),
             has_factors=bool(factors),
             has_analysis_run=analysis_run is not None,
             has_final_summary=bool(analysis_run and analysis_run.final_summary),

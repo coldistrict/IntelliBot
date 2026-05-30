@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AnalysisDetailClient } from "@/components/analysis/analysis-detail-client";
-import { fetchAnalysis, fetchAnalysisProgress, rerunAnalysis } from "@/lib/api";
+import { fetchAnalysis, fetchAnalysisProgress } from "@/lib/api";
 
 vi.mock("next/link", () => ({
   default: ({
@@ -575,12 +575,206 @@ describe("AnalysisDetailClient", () => {
       expect(screen.getByText(/current read: yes 43% \/ no 57% with low confidence/i)).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/yes probability/i)).toBeInTheDocument();
-    expect(screen.getByText(/no probability/i)).toBeInTheDocument();
+    expect(screen.getByText(/most likely: no/i)).toBeInTheDocument();
+    expect(screen.getByText(/model yes read/i)).toBeInTheDocument();
+    expect(screen.getByText(/model no read/i)).toBeInTheDocument();
+    expect(screen.getByText(/polymarket prior/i)).toBeInTheDocument();
     expect(screen.getAllByText("43%").length).toBeGreaterThan(0);
     expect(screen.getAllByText("57%").length).toBeGreaterThan(0);
     expect(screen.queryByText("31% - 55%")).not.toBeInTheDocument();
     expect(screen.queryByText(/numeric estimate withheld/i)).not.toBeInTheDocument();
+  });
+
+  it("explains missing probability clearly when no directional read exists", async () => {
+    vi.mocked(fetchAnalysis).mockResolvedValue({
+      request: {
+        id: 30,
+        mode: "manual",
+        input_type: "custom_claim",
+        input_text: "Will the war in Iran automatically restart after the cease fire?",
+        market_id: null,
+        template_requested: "generic_manual",
+        template_selected: "generic_manual",
+        status: "complete",
+        current_stage: "complete",
+        error_message: null,
+        started_at: "2026-04-18T18:10:06Z",
+        completed_at: "2026-04-18T18:10:20Z",
+        created_at: "2026-04-18T18:10:06Z",
+        updated_at: "2026-04-18T18:10:20Z",
+        latest_recommendation_label: "analysis_only",
+        latest_confidence_label: "low",
+        review_count: 0,
+        progress_percent: 100,
+        current_stage_label: "Complete",
+        current_stage_note: "Analysis complete. The research brief and audit are ready.",
+        display_summary:
+          "Will the war in Iran automatically restart after the cease fire? currently reads as insufficient basis.",
+        qualitative_label: "insufficient_basis",
+      },
+      market: null,
+      latest_rule_parse: {
+        question_text: "Will the war in Iran automatically restart after the cease fire?",
+        event: "Will the war in Iran automatically restart after the cease fire?",
+        entity_names: ["Iran"],
+        action: "restart",
+        claim_family: "generic_manual",
+        yes_condition: "YES if the war in Iran automatically restart after the cease fire happens.",
+        no_condition: "NO if the war in Iran automatically restart after the cease fire does not happen.",
+        deadline_text: null,
+        resolution_definition: "Will the war in Iran automatically restart after the cease fire?",
+        directional_scoring_policy: {
+          allowed_roles: ["outcome", "direct_support", "direct_contradiction"],
+        },
+        official_resolution_source: null,
+        official_domains: [],
+        ambiguity_flags: [],
+        clarity_score: 0.68,
+        resolution_risk: 0.32,
+        suitable_for_auto: false,
+        template_detected: "generic_manual",
+      },
+      latest_run: {
+        id: 40,
+        request_id: 30,
+        market_id: null,
+        rule_parse_id: 18,
+        template_selected: "generic_manual",
+        market_mid_prob: null,
+        yes_exec_price: null,
+        no_exec_price: null,
+        priced_in_risk_label: "high",
+        numeric_estimate_available: false,
+        numeric_estimate_reason: "there are fewer than two scored directional factors",
+        qualitative_label: "insufficient_basis",
+        p_hat: null,
+        p_low: null,
+        p_high: null,
+        confidence_label: "low",
+        recommendation_label: "analysis_only",
+        why_wrong_summary: "This could still change if stronger direct evidence appears.",
+        final_summary:
+          "Will the war in Iran automatically restart after the cease fire? currently reads as insufficient basis.",
+        created_at: "2026-04-18T18:10:20Z",
+      },
+      recommendation: {
+        recommendation_label: "analysis_only",
+        confidence_label: "low",
+        edge_yes: null,
+        edge_no: null,
+        rationale_json: {
+          reason: "there are fewer than two scored directional factors",
+        },
+      },
+      progress: {
+        current_stage: "complete",
+        current_label: "Complete",
+        current_note: "Analysis complete. The research brief and audit are ready.",
+        completed_count: 11,
+        total_count: 11,
+        percent_complete: 100,
+        last_updated_at: "2026-04-18T18:10:20Z",
+        stages: [],
+      },
+      audit: {
+        rule_interpretation: {
+          template: "generic_manual",
+          claim_family: "generic_manual",
+          action: "restart",
+          yes_condition: "YES if the war in Iran automatically restart after the cease fire happens.",
+          no_condition: "NO if the war in Iran automatically restart after the cease fire does not happen.",
+          deadline_text: null,
+          resolution_definition: "Will the war in Iran automatically restart after the cease fire?",
+          clarity_score: 0.68,
+          resolution_risk: 0.32,
+        },
+        source_lanes: {
+          official: 0,
+          news: 4,
+          premium: 0,
+          live_social: 0,
+          manual_social: 0,
+          manual_input: 1,
+          total: 5,
+          contributing_sources: 0,
+        },
+        social_modifier: null,
+        probability: {
+          numeric_estimate_available: false,
+          numeric_estimate_reason: "there are fewer than two scored directional factors",
+          prior_probability: null,
+          prior_logit: null,
+          non_social_evidence: 0,
+          raw_social_evidence: 0,
+          capped_social_evidence: 0,
+          total_evidence: 0,
+          p_hat: null,
+        },
+        uncertainty: {
+          base_uncertainty: 0.2,
+          total_uncertainty: 0.4,
+          p_low: null,
+          p_high: null,
+          adjustments: [],
+        },
+        recommendation_math: {
+          yes_exec_price: null,
+          no_exec_price: null,
+          friction_buffer: null,
+          edge_yes: null,
+          edge_no: null,
+          chosen_label: "analysis_only",
+          note: "No market was linked, so this run remains analysis-only.",
+        },
+        confidence: {
+          final_label: "low",
+          reason: "The run stayed qualitative-only with no scored directional factors.",
+        },
+        factor_contributions: [],
+      },
+      presentation: {
+        headline: "Will the war in Iran automatically restart after the cease fire?",
+        thesis: "Current read: insufficient basis with low confidence.",
+        status_note: "Analysis complete. The research brief and audit are ready.",
+        brief_sections: {
+          what_it_means:
+            "Will the war in Iran automatically restart after the cease fire? currently reads as insufficient basis.",
+          why_yes: [],
+          why_no: [],
+          context: [],
+          caveats: "This could still change if stronger direct evidence appears.",
+        },
+        artifact_statuses: [
+          { key: "rule_parse", label: "Rules interpreted", status: "complete", note: "Rules parsed.", available: true },
+        ],
+      },
+      display_summary:
+        "Will the war in Iran automatically restart after the cease fire? currently reads as insufficient basis.",
+      last_updated_at: "2026-04-18T18:10:20Z",
+      social_intel_summary: null,
+      sources: [],
+      documents: [],
+      passages: [],
+      trusted_social_sources: [],
+      fact_claims: [],
+      factors: [],
+      reviews: [],
+    } as never);
+
+    render(<AnalysisDetailClient analysisId="30" />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/current read: insufficient basis with low confidence/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/no directional read yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/no linked polymarket market was available, and the available evidence did not form a directional read yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Probability$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^No estimate$/i)).toBeInTheDocument();
+    expect(screen.getByText(/qualitative read: insufficient basis\./i)).toBeInTheDocument();
+    expect(screen.getByText(/why no estimate/i)).toBeInTheDocument();
+    expect(screen.getByText(/there are fewer than two scored directional factors/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^Analysis Only$/i)).not.toBeInTheDocument();
   });
 
   it("renders running-state placeholders inside the memo layout", async () => {
@@ -659,7 +853,7 @@ describe("AnalysisDetailClient", () => {
           { key: "social_intelligence", label: "Social intelligence", status: "pending", note: "Waiting.", available: false },
           { key: "factor_mapping", label: "Factors scored", status: "pending", note: "Waiting.", available: false },
           { key: "brief_generation", label: "Brief written", status: "pending", note: "Waiting.", available: false },
-          { key: "audit", label: "Audit ready", status: "pending", note: "The audit inspector unlocks once a run exists.", available: false },
+          { key: "audit", label: "Audit ready", status: "pending", note: "The audit inspector unlocks once scored factors are ready.", available: false },
         ],
       },
       display_summary: "Analysis in progress. Searching official and news sources.",

@@ -65,13 +65,12 @@ def build_artifact_statuses(
         {
             "key": "audit",
             "label": "Audit ready",
-            "status": "complete" if has_analysis_run else "pending",
+            "status": "complete" if has_analysis_run and has_factors else "pending",
             "note": (
                 "Structured scoring, uncertainty, recommendation, and grounding details are ready."
-                if has_analysis_run
-                else "The audit inspector unlocks once a run exists."
+                if has_analysis_run and has_factors
+                else "The audit inspector unlocks once scored factors are ready."
             ),
-            "available": has_analysis_run,
+            "available": has_analysis_run and has_factors,
         },
     ]
-

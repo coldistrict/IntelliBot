@@ -94,7 +94,14 @@ class TavilyClient:
         if any(
             host in domain
             for host in {
+                "centerforpolitics.org",
+                "cookpolitical.com",
+                "electiongraphs.com",
+                "fivethirtyeight.com",
+                "insideelections.com",
+                "natesilver.net",
                 "scotusblog.com",
+                "split-ticket.org",
                 "lawfaremedia.org",
                 "brookings.edu",
                 "piie.com",
