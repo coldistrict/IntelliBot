@@ -6,9 +6,9 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <section className="max-w-5xl space-y-4">
         <p className="eyebrow">Settings</p>
-        <h2 className="page-title">
+        <h1 className="page-title">
           Keep the desk ready without turning setup into another dashboard.
-        </h2>
+        </h1>
         <p className="page-intro">
           OpenAI, Grok, and search are the core path. Premium access and FRED remain optional and
           should never block the rest of the workflow.
@@ -18,11 +18,11 @@ export default function SettingsPage() {
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <ProviderStatusPanel />
         <Panel className="p-5">
-          <div className="border-b border-black/8 pb-3">
+          <div className="border-b border-black/10 pb-3">
             <p className="section-label">Optional setup</p>
             <h3 className="mt-1.5 font-serif text-2xl text-ink">Premium and macro extras</h3>
           </div>
-          <div className="mt-4 space-y-4 text-sm leading-7 text-ink/64">
+          <div className="mt-4 space-y-4 text-sm leading-7 text-ink/70">
             <p>
               Premium retrieval stays off by default. The desk should still work cleanly without a
               saved browser session.

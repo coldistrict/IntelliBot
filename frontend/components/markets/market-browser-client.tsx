@@ -70,31 +70,35 @@ function MarketRow({
           {market.title}
         </Link>
         {market.event_title ? (
-          <p className="mt-1 text-sm leading-6 text-ink/58">{market.event_title}</p>
+          <p className="mt-1 text-sm leading-6 text-ink/60">{market.event_title}</p>
         ) : null}
-        <div className="mt-3 grid gap-2 text-sm text-ink/58 sm:grid-cols-3">
+        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-ink/60">
           <p>
-            <span className="font-semibold text-ink">Liquidity:</span>{" "}
-            {formatCurrency(market.liquidity)}
+            <span className="font-medium text-ink/80">Liquidity</span>{" "}
+            <span className="tabular-nums">{formatCurrency(market.liquidity)}</span>
           </p>
           <p>
-            <span className="font-semibold text-ink">24h:</span>{" "}
-            {formatCurrency(market.volume_24h)}
+            <span className="font-medium text-ink/80">24h volume</span>{" "}
+            <span className="tabular-nums">{formatCurrency(market.volume_24h)}</span>
           </p>
           <p>
-            <span className="font-semibold text-ink">Ends:</span> {formatDate(market.expiry_at)}
+            <span className="font-medium text-ink/80">Ends</span> {formatDate(market.expiry_at)}
           </p>
         </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] lg:grid-cols-3">
-        <div className="rounded-lg border border-black/10 bg-white/70 p-3">
-          <p className="section-label">YES</p>
-          <p className="mt-1 text-lg font-semibold text-ink">{formatPercent(yesMidpoint)}</p>
+        <div className="rounded-lg border border-pine/20 bg-pine/5 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-pine/80">Yes</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-pine">
+            {formatPercent(yesMidpoint)}
+          </p>
         </div>
-        <div className="rounded-lg border border-black/10 bg-white/70 p-3">
-          <p className="section-label">NO</p>
-          <p className="mt-1 text-lg font-semibold text-ink">{formatPercent(noMidpoint)}</p>
+        <div className="rounded-lg border border-ember/20 bg-ember/5 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ember/80">No</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-ember">
+            {formatPercent(noMidpoint)}
+          </p>
         </div>
         <button
           type="button"
@@ -185,7 +189,7 @@ export function MarketBrowserClient() {
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="space-y-4">
           <p className="eyebrow">Market Browser</p>
-          <h2 className="page-title">Find live Polymarket questions worth reading deeply.</h2>
+          <h1 className="page-title">Find live Polymarket questions worth reading deeply.</h1>
           <p className="page-intro">
             Browse public markets, inspect live pricing context, and send one into the research desk.
           </p>
@@ -193,7 +197,7 @@ export function MarketBrowserClient() {
         <Panel className="space-y-3 p-4">
           <p className="section-label">Current view</p>
           <p className="font-serif text-2xl text-ink">{pageTitle}</p>
-          <p className="text-sm leading-6 text-ink/58">
+          <p className="text-sm leading-6 text-ink/60">
             {isLoading ? "Loading markets" : `${markets.length} markets loaded`}
           </p>
         </Panel>
@@ -239,10 +243,8 @@ export function MarketBrowserClient() {
                 setActiveQuery("");
                 setView(option.value);
               }}
-              className={`rounded-md border px-3 py-2 text-sm font-semibold transition ${
-                !activeQuery && view === option.value
-                  ? "border-ink bg-ink text-white"
-                  : "border-black/10 bg-white/65 text-ink/64 hover:bg-white hover:text-ink"
+              className={`filter-chip ${
+                !activeQuery && view === option.value ? "filter-chip-active" : "filter-chip-idle"
               }`}
             >
               {option.label}
@@ -258,7 +260,7 @@ export function MarketBrowserClient() {
       ) : null}
 
       <Panel className="p-5">
-        <div className="border-b border-black/8 pb-3">
+        <div className="border-b border-black/10 pb-3">
           <p className="section-label">{activeQuery ? "Search results" : pageTitle}</p>
           <h3 className="mt-1.5 font-serif text-2xl text-ink">Live markets</h3>
         </div>
@@ -281,7 +283,7 @@ export function MarketBrowserClient() {
             ))}
           </div>
         ) : (
-          <div className="py-6 text-sm leading-7 text-ink/58">
+          <div className="py-6 text-sm leading-7 text-ink/60">
             No markets matched this view.
           </div>
         )}

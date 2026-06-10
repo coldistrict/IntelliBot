@@ -66,7 +66,7 @@ export function ProviderStatusPanel() {
 
   return (
     <Panel className="p-5">
-      <div className="border-b border-black/8 pb-3">
+      <div className="border-b border-black/10 pb-3">
         <p className="section-label">Provider readiness</p>
         <h3 className="mt-1.5 font-serif text-2xl text-ink">What the desk can use right now</h3>
       </div>
@@ -76,7 +76,7 @@ export function ProviderStatusPanel() {
           {rows.map((row) => (
             <div
               key={row.key}
-              className="grid gap-3 border-b border-black/8 py-4 last:border-b-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_11rem]"
+              className="grid gap-3 border-b border-black/10 py-4 last:border-b-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_11rem]"
             >
               <div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -85,16 +85,16 @@ export function ProviderStatusPanel() {
                     {status[row.key] ? "ready" : "missing"}
                   </Badge>
                 </div>
-                <p className="mt-1 text-sm leading-6 text-ink/62">{row.note}</p>
+                <p className="mt-1 text-sm leading-6 text-ink/60">{row.note}</p>
               </div>
-              <div className="text-sm leading-6 text-ink/56 md:text-right">
+              <div className="text-sm leading-6 text-ink/60 md:text-right">
                 {status[row.key] ? "No action needed." : row.nextStep}
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <p className="mt-4 text-sm text-ink/55">Loading provider readiness…</p>
+        <p className="mt-4 text-sm text-ink/60">Loading provider readiness…</p>
       )}
     </Panel>
   );
