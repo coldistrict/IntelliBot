@@ -28,3 +28,31 @@ class MarketResponse(ORMModel):
 class MarketListResponse(BaseModel):
     items: list[MarketResponse]
     total: int
+
+
+class PublicMarketResponse(BaseModel):
+    polymarket_id: str
+    title: str
+    url: str | None = None
+    rules_text: str | None = None
+    description: str | None = None
+    yes_bid: float | None = None
+    yes_ask: float | None = None
+    no_bid: float | None = None
+    no_ask: float | None = None
+    liquidity: float | None = None
+    volume_24h: float | None = None
+    spread: float | None = None
+    expiry_at: datetime | None = None
+    status: str | None = None
+    category: str | None = None
+    event_title: str | None = None
+    event_slug: str | None = None
+    image: str | None = None
+    featured: bool = False
+    is_new: bool = False
+
+
+class PublicMarketListResponse(BaseModel):
+    items: list[PublicMarketResponse]
+    total: int

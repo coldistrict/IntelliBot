@@ -123,6 +123,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/calibration/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh Outcomes */
+        post: operations["refresh_outcomes_api_calibration_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/calibration/scoreboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Calibration Scoreboard */
+        get: operations["calibration_scoreboard_api_calibration_scoreboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -149,6 +183,40 @@ export interface paths {
         };
         /** List Markets */
         get: operations["list_markets_api_markets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/markets/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Discover Markets */
+        get: operations["discover_markets_api_markets_discover_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/markets/remote/{polymarket_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Public Market */
+        get: operations["get_public_market_api_markets_remote__polymarket_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -425,6 +493,35 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /** CalibrationBucket */
+        CalibrationBucket: {
+            /** Actual Yes Rate */
+            actual_yes_rate: number | null;
+            /** Avg P Hat */
+            avg_p_hat: number | null;
+            /** Count */
+            count: number;
+            /** Label */
+            label: string;
+            /** Lower */
+            lower: number;
+            /** Upper */
+            upper: number;
+        };
+        /** CalibrationScoreboardResponse */
+        CalibrationScoreboardResponse: {
+            /** Buckets */
+            buckets: components["schemas"]["CalibrationBucket"][];
+            /** Confidence Slices */
+            confidence_slices: components["schemas"]["SliceStats"][];
+            /** Pending */
+            pending: components["schemas"]["PendingRunRow"][];
+            /** Resolved */
+            resolved: components["schemas"]["ResolvedRunRow"][];
+            summary: components["schemas"]["ScoreboardSummary"];
+            /** Template Slices */
+            template_slices: components["schemas"]["SliceStats"][];
+        };
         /**
          * ClaimFamilyEnum
          * @enum {string}
@@ -697,6 +794,17 @@ export interface components {
          * @enum {string}
          */
         NarrativePhaseEnum: "fresh" | "emerging" | "crowded" | "priced_in";
+        /** OutcomeRefreshResponse */
+        OutcomeRefreshResponse: {
+            /** Lookup Failures */
+            lookup_failures: number;
+            /** Markets Checked */
+            markets_checked: number;
+            /** Newly Resolved */
+            newly_resolved: number;
+            /** Still Open */
+            still_open: number;
+        };
         /** PassageResponse */
         PassageResponse: {
             /** Analysis Run Id */
@@ -718,6 +826,20 @@ export interface components {
             source_id: number;
             /** Text */
             text: string;
+        };
+        /** PendingRunRow */
+        PendingRunRow: {
+            /** Analysis Request Id */
+            analysis_request_id: number;
+            /** Analysis Run Id */
+            analysis_run_id: number;
+            /** Market Expiry At */
+            market_expiry_at: string | null;
+            /** P Hat */
+            p_hat: number | null;
+            recommendation_label: components["schemas"]["RecommendationLabelEnum"] | null;
+            /** Title */
+            title: string;
         };
         /** PresentationArtifactStatusResponse */
         PresentationArtifactStatusResponse: {
@@ -807,6 +929,62 @@ export interface components {
             /** Search Configured */
             search_configured: boolean;
         };
+        /** PublicMarketListResponse */
+        PublicMarketListResponse: {
+            /** Items */
+            items: components["schemas"]["PublicMarketResponse"][];
+            /** Total */
+            total: number;
+        };
+        /** PublicMarketResponse */
+        PublicMarketResponse: {
+            /** Category */
+            category?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Event Slug */
+            event_slug?: string | null;
+            /** Event Title */
+            event_title?: string | null;
+            /** Expiry At */
+            expiry_at?: string | null;
+            /**
+             * Featured
+             * @default false
+             */
+            featured: boolean;
+            /** Image */
+            image?: string | null;
+            /**
+             * Is New
+             * @default false
+             */
+            is_new: boolean;
+            /** Liquidity */
+            liquidity?: number | null;
+            /** No Ask */
+            no_ask?: number | null;
+            /** No Bid */
+            no_bid?: number | null;
+            /** Polymarket Id */
+            polymarket_id: string;
+            /** Rules Text */
+            rules_text?: string | null;
+            /** Spread */
+            spread?: number | null;
+            /** Status */
+            status?: string | null;
+            /** Title */
+            title: string;
+            /** Url */
+            url?: string | null;
+            /** Volume 24H */
+            volume_24h?: number | null;
+            /** Yes Ask */
+            yes_ask?: number | null;
+            /** Yes Bid */
+            yes_bid?: number | null;
+        };
         /**
          * QualitativeLabelEnum
          * @enum {string}
@@ -860,6 +1038,38 @@ export interface components {
          * @enum {string}
          */
         RequestStatusEnum: "queued" | "running" | "complete" | "failed";
+        /** ResolvedRunRow */
+        ResolvedRunRow: {
+            /** Analysis Request Id */
+            analysis_request_id: number;
+            /** Analysis Run Id */
+            analysis_run_id: number;
+            confidence_label: components["schemas"]["ConfidenceLabelEnum"] | null;
+            /** Direction Hit */
+            direction_hit: boolean | null;
+            /** Market Brier */
+            market_brier: number | null;
+            /** Market Mid Prob */
+            market_mid_prob: number | null;
+            /** Model Brier */
+            model_brier: number | null;
+            /** Outcome */
+            outcome: string;
+            /** P Hat */
+            p_hat: number | null;
+            recommendation_label: components["schemas"]["RecommendationLabelEnum"] | null;
+            /** Resolved At */
+            resolved_at: string | null;
+            template: components["schemas"]["TemplateKey"] | null;
+            /** Title */
+            title: string;
+            /** Trade Entry Price */
+            trade_entry_price: number | null;
+            /** Trade Pnl */
+            trade_pnl: number | null;
+            /** Trade Side */
+            trade_side: string | null;
+        };
         /** ReviewCreateRequest */
         ReviewCreateRequest: {
             decision: components["schemas"]["ReviewDecisionEnum"];
@@ -939,6 +1149,56 @@ export interface components {
             timezone_text: string | null;
             /** Yes Condition */
             yes_condition: string;
+        };
+        /** ScoreboardSummary */
+        ScoreboardSummary: {
+            /** Avg Market Brier */
+            avg_market_brier: number | null;
+            /** Avg Model Brier */
+            avg_model_brier: number | null;
+            /** Direction Calls */
+            direction_calls: number;
+            /** Direction Hit Rate */
+            direction_hit_rate: number | null;
+            /** Head To Head Market Brier */
+            head_to_head_market_brier: number | null;
+            /** Head To Head Model Brier */
+            head_to_head_model_brier: number | null;
+            /** Head To Head Runs */
+            head_to_head_runs: number;
+            /** Model Beats Market Rate */
+            model_beats_market_rate: number | null;
+            /** Pending Runs */
+            pending_runs: number;
+            /** Resolved Runs */
+            resolved_runs: number;
+            /** Roi Per Trade */
+            roi_per_trade: number | null;
+            /** Scored Runs */
+            scored_runs: number;
+            /** Total Pnl */
+            total_pnl: number;
+            /** Trade Count */
+            trade_count: number;
+            /** Trade Wins */
+            trade_wins: number;
+            /** Unlinked Runs */
+            unlinked_runs: number;
+        };
+        /** SliceStats */
+        SliceStats: {
+            /** Avg Model Brier */
+            avg_model_brier: number | null;
+            /** Direction Hit Rate */
+            direction_hit_rate: number | null;
+            /** Key */
+            key: string;
+            /** Resolved Runs */
+            resolved_runs: number;
+            /** Total Pnl */
+            total_pnl: number;
+            /** Trades */
+            trades: number;
         };
         /** SocialIntelSummaryResponse */
         SocialIntelSummaryResponse: {
@@ -1370,6 +1630,46 @@ export interface operations {
             };
         };
     };
+    refresh_outcomes_api_calibration_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutcomeRefreshResponse"];
+                };
+            };
+        };
+    };
+    calibration_scoreboard_api_calibration_scoreboard_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationScoreboardResponse"];
+                };
+            };
+        };
+    };
     health_check_api_health_get: {
         parameters: {
             query?: never;
@@ -1409,6 +1709,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discover_markets_api_markets_discover_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                view?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicMarketListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_public_market_api_markets_remote__polymarket_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                polymarket_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicMarketResponse"];
                 };
             };
             /** @description Validation Error */

@@ -2093,7 +2093,9 @@ class AnalysisProcessor:
                 f"numeric_estimate_available: {score_outcome.numeric_estimate_available}",
                 f"numeric_estimate_reason: {score_outcome.numeric_estimate_reason or 'n/a'}",
                 f"qualitative_label: {score_outcome.qualitative_label.value if score_outcome.qualitative_label else 'n/a'}",
-                f"p_hat: {score_outcome.p_hat}",
+                f"p_hat_yes_probability: {score_outcome.p_hat}",
+                f"p_no_probability: {round(1 - score_outcome.p_hat, 4) if score_outcome.p_hat is not None else None}",
+                f"numeric_decision_read: {self._numeric_decision_read(score_outcome.p_hat)}",
                 f"p_low: {score_outcome.p_low}",
                 f"p_high: {score_outcome.p_high}",
                 f"confidence: {score_outcome.recommendation.confidence_label.value}",
@@ -3412,6 +3414,16 @@ class AnalysisProcessor:
         if abs(yes_count - no_count) <= 1 and abs(evidence) < 0.14:
             return QualitativeLabelEnum.MIXED
         return QualitativeLabelEnum.LEANS_YES if evidence > 0 else QualitativeLabelEnum.LEANS_NO
+
+    @staticmethod
+    def _numeric_decision_read(p_hat: float | None) -> str:
+        if p_hat is None:
+            return "no numeric YES probability"
+        if p_hat > 0.5:
+            return "YES is more likely"
+        if p_hat < 0.5:
+            return "NO is more likely"
+        return "coin flip"
 
     def _condition_alignment(self, rule_parse: RuleParse, text: str) -> StanceEnum:
         fact_terms = self._signal_terms(self._expand_search_aliases(text))

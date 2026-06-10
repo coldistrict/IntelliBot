@@ -31,6 +31,8 @@ class Market(TimestampMixin, Base):
     spread: Mapped[float | None] = mapped_column(Float)
     expiry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str | None] = mapped_column(String(64))
+    resolved_outcome: Mapped[str | None] = mapped_column(String(16))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     analysis_requests: Mapped[list["AnalysisRequest"]] = relationship(back_populates="market")
     analysis_runs: Mapped[list["AnalysisRun"]] = relationship(back_populates="market")

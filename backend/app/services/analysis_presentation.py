@@ -153,11 +153,9 @@ def build_analysis_presentation(
     )
 
     what_it_means = display_summary
-    if analysis_run and analysis_run.final_summary:
-        what_it_means = analysis_run.final_summary
 
     return {
-        "headline": request.input_text,
+        "headline": request.market.title if request.market else request.input_text,
         "thesis": thesis,
         "status_note": status_note,
         "brief_sections": {

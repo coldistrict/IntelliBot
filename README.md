@@ -55,6 +55,11 @@ The frontend runs on `http://localhost:3000` and the backend runs on `http://loc
   - Manual Mode can optionally run a live X intelligence lane through xAI, with:
     - a trusted-account timeline that includes trust and relevance justification
     - a broader X consensus summary that feeds confidence and priced-in risk, not a hidden social-only probability
+- The calibration loop now closes the shadow-mode promise:
+  - market-linked analyses are tracked until the market resolves on Polymarket
+  - "Check for resolutions" on the Scoreboard page polls the free Gamma API and records final outcomes
+  - resolved runs are scored against reality: Brier vs the market prior, direction hit rate,
+    calibration buckets, and a virtual $100-per-lean P&L, sliced by template and confidence
 - Auto Mode and deeper provider-backed retrieval still need the next implementation passes.
 
 ## Useful Commands

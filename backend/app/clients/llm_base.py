@@ -13,6 +13,27 @@ from app.services.model_cache import get_cached_response, hash_payload, store_ca
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
 
 
+def _openai_strict_json_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    def normalize(value: Any) -> Any:
+        if isinstance(value, list):
+            return [normalize(item) for item in value]
+        if not isinstance(value, dict):
+            return value
+
+        normalized = {key: normalize(item) for key, item in value.items() if key != "default"}
+        if normalized.get("type") == "object" or "properties" in normalized:
+            properties = normalized.get("properties")
+            additional_properties = normalized.get("additionalProperties")
+            if additional_properties is not None and additional_properties is not False:
+                raise ValueError("OpenAI strict JSON schemas do not support free-form objects.")
+            normalized["additionalProperties"] = False
+            if isinstance(properties, dict):
+                normalized["required"] = list(properties)
+        return normalized
+
+    return normalize(schema)
+
+
 class StructuredChatClient:
     def __init__(
         self,
@@ -49,11 +70,12 @@ class StructuredChatClient:
         if not self.is_configured:
             raise RuntimeError(f"{self.provider} client is not configured.")
 
+        schema = _openai_strict_json_schema(schema_model.model_json_schema())
         input_payload = {
             "system_prompt": system_prompt,
             "user_prompt": user_prompt,
             "schema_name": schema_model.__name__,
-            "schema": schema_model.model_json_schema(),
+            "schema": schema,
         }
         input_hash = hash_payload(input_payload)
         cached = get_cached_response(
@@ -79,7 +101,7 @@ class StructuredChatClient:
                 "json_schema": {
                     "name": schema_model.__name__,
                     "strict": True,
-                    "schema": schema_model.model_json_schema(),
+                    "schema": schema,
                 },
             },
         }
