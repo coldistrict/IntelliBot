@@ -76,9 +76,9 @@ export function SiteShell({ children }: SiteShellProps) {
         {children}
       </main>
       <footer className="border-t border-black/10 px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-[94rem] flex-wrap items-center justify-between gap-3 text-xs text-ink/45">
+        <div className="mx-auto flex max-w-[94rem] flex-wrap items-center justify-between gap-3 text-xs text-ink/50">
           <p>
-            <span className="font-serif text-sm italic text-ink/55">Polymarket Copilot</span>
+            <span className="font-serif text-sm italic text-ink/60">Polymarket Copilot</span>
             {" · "}shadow-mode research desk — analysis only, no orders are ever placed.
           </p>
           <p>Manual runs · live memos · calibration scoreboard</p>

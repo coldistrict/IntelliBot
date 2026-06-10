@@ -113,9 +113,9 @@ export function ManualAnalysisForm() {
     <div className="space-y-6">
       <section className="max-w-5xl space-y-4">
         <p className="eyebrow">Manual Analysis</p>
-        <h2 className="page-title">
+        <h1 className="page-title">
           Compose the research run, then let the memo build itself.
-        </h2>
+        </h1>
         <p className="page-intro">
           Start with one clear claim, URL, or market ID. The desk will parse the proposition,
           gather sources, verify evidence, and open a live memo page while the run is still
@@ -134,7 +134,7 @@ export function ManualAnalysisForm() {
 
             <fieldset>
               <legend className="text-sm font-semibold text-ink">Input type</legend>
-              <div className="mt-2 grid gap-2 rounded-lg border border-black/10 bg-white/45 p-1 sm:grid-cols-3">
+              <div className="mt-2 grid gap-2 rounded-lg border border-black/10 bg-white/50 p-1 sm:grid-cols-3">
                 {inputModeOptions.map(({ value, label }) => (
                   <button
                     key={value}
@@ -198,7 +198,7 @@ export function ManualAnalysisForm() {
               <p className="section-label">
                 Analysis settings
               </p>
-              <span className="text-sm text-ink/55">Keep this compact unless the claim needs extra framing.</span>
+              <span className="text-sm text-ink/60">Keep this compact unless the claim needs extra framing.</span>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
@@ -240,7 +240,7 @@ export function ManualAnalysisForm() {
                 />
                 <div className="ml-3">
                   <p className="text-sm font-semibold text-ink">Include live X intelligence</p>
-                  <p className="mt-1 text-xs leading-6 text-ink/55">
+                  <p className="mt-1 text-xs leading-6 text-ink/60">
                     Grok searches live X and web context for trusted accounts and narrative shifts.
                   </p>
                 </div>
@@ -255,7 +255,7 @@ export function ManualAnalysisForm() {
                 />
                 <div className="ml-3">
                   <p className="text-sm font-semibold text-ink">Enable premium retrieval</p>
-                  <p className="mt-1 text-xs leading-6 text-ink/55">
+                  <p className="mt-1 text-xs leading-6 text-ink/60">
                     Allow paywalled premium-news search results into the source set when they are relevant.
                   </p>
                 </div>

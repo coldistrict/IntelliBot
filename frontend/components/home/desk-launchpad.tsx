@@ -46,8 +46,8 @@ function CompactRunRow({ item }: { item: AnalysisSummary }) {
           <Badge variant="muted">{item.latest_confidence_label.replaceAll("_", " ")}</Badge>
         ) : null}
       </div>
-      <h4 className="mt-2 line-clamp-2 text-base font-semibold leading-6 text-ink">{item.input_text}</h4>
-      <p className="mt-1 line-clamp-2 text-sm leading-6 text-ink/60">{statusCopy(item)}</p>
+      <h4 className="mt-2 line-clamp-2 break-words text-base font-semibold leading-6 text-ink">{item.input_text}</h4>
+      <p className="mt-1 line-clamp-2 break-words text-sm leading-6 text-ink/60">{statusCopy(item)}</p>
     </Link>
   );
 }
@@ -91,9 +91,9 @@ export function DeskLaunchpad() {
         <div className="space-y-5">
           <div className="max-w-5xl space-y-4">
             <p className="eyebrow">Desk Launchpad</p>
-            <h2 className="page-title">
+            <h1 className="page-title">
               Read one market deeply, then inspect exactly how the memo got there.
-            </h2>
+            </h1>
             <p className="page-intro">
               Manual analyses stay the center of the product. Start a claim, follow the live run,
               then open the memo and layered inspector once the evidence is ready.

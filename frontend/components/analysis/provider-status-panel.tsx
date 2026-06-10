@@ -87,14 +87,14 @@ export function ProviderStatusPanel() {
                 </div>
                 <p className="mt-1 text-sm leading-6 text-ink/60">{row.note}</p>
               </div>
-              <div className="text-sm leading-6 text-ink/55 md:text-right">
+              <div className="text-sm leading-6 text-ink/60 md:text-right">
                 {status[row.key] ? "No action needed." : row.nextStep}
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <p className="mt-4 text-sm text-ink/55">Loading provider readiness…</p>
+        <p className="mt-4 text-sm text-ink/60">Loading provider readiness…</p>
       )}
     </Panel>
   );

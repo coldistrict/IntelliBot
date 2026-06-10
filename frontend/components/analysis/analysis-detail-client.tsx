@@ -166,7 +166,7 @@ function scrollToDetailSection(id: string) {
 
 function SectionPlaceholder({ title, note }: { title: string; note: string }) {
   return (
-    <article className="rounded-lg border border-dashed border-black/10 bg-white/55 p-4">
+    <article className="rounded-lg border border-dashed border-black/10 bg-white/60 p-4">
       <p className="text-sm font-semibold text-ink">{title}</p>
       <p className="mt-2 text-sm leading-6 text-ink/60">{note}</p>
       <div className="mt-4 space-y-2 animate-pulse">
@@ -222,7 +222,7 @@ function SocialTimelineCard({ source }: { source: Source }) {
         </span>
       </div>
       <p className="mt-2 text-base font-semibold text-ink">{displayName}</p>
-      <p className="mt-1 text-sm leading-6 text-ink/65">{source.excerpt}</p>
+      <p className="mt-1 text-sm leading-6 text-ink/70">{source.excerpt}</p>
       {trustReason ? (
         <p className="mt-2 text-sm leading-6 text-ink/60">
           <span className="font-semibold text-ink">Why trusted:</span> {trustReason}
@@ -233,7 +233,7 @@ function SocialTimelineCard({ source }: { source: Source }) {
           <span className="font-semibold text-ink">Why relevant:</span> {relevanceReason}
         </p>
       ) : null}
-      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-ink/55">
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-ink/60">
         {handle ? <span>@{handle}</span> : null}
         {trustConfidence !== null ? <span>{Math.round(trustConfidence * 100)}% trust confidence</span> : null}
         {source.url ? (
@@ -261,7 +261,7 @@ function SocialConsensusSnapshot({ summary }: { summary: SocialIntelSummary }) {
           : "Uncertainty only";
 
   return (
-    <article className="rounded-lg border border-black/10 bg-white/65 p-4">
+    <article className="rounded-lg border border-black/10 bg-white/70 p-4">
       <p className="section-label">Broader X consensus</p>
       <p className="mt-3 text-xl font-semibold text-ink">
         {sentenceCaseLabel(consensusLabel)} with {consensusStrength} conviction
@@ -271,7 +271,7 @@ function SocialConsensusSnapshot({ summary }: { summary: SocialIntelSummary }) {
         {articleForPhrase(narrativePhase)}{" "}
         {narrativePhase} phase.
       </p>
-      <p className="mt-3 max-w-4xl text-sm leading-6 text-ink/65">{summary.summary}</p>
+      <p className="mt-3 max-w-4xl text-sm leading-6 text-ink/70">{summary.summary}</p>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="border-l border-black/10 pl-3">
@@ -489,14 +489,14 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
           </h1>
           <p className="mt-3 max-w-4xl text-base leading-7 text-ink/70">{detail.presentation.thesis}</p>
           <p className="mt-2 max-w-4xl text-sm leading-6 text-ink/60">{detail.presentation.status_note}</p>
-          <div className="mt-4 flex flex-wrap gap-4 text-sm text-ink/55">
+          <div className="mt-4 flex flex-wrap gap-4 text-sm text-ink/60">
             <span>Last updated {formatDate(lastUpdated)}</span>
             <span>Elapsed {formatElapsed(displayedStartedAt, detail.request.completed_at)}</span>
             {detail.progress.current_label ? <span>Current stage: {detail.progress.current_label}</span> : null}
           </div>
           {isRunning || isFailed ? (
             <div className="mt-4 max-w-4xl">
-              <div className="mb-2 flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink/45">
+              <div className="mb-2 flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink/50">
                 <span>{isFailed ? "Stopped" : detail.progress.current_label ?? "Running"}</span>
                 <span>{detail.progress.percent_complete}%</span>
               </div>
@@ -650,7 +650,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
 
           <div className="memo-rule space-y-3 pt-5">
             <h3 className="font-serif text-2xl text-ink">Why this could be wrong</h3>
-            <p className="max-w-4xl text-sm leading-7 text-ink/65">
+            <p className="max-w-4xl text-sm leading-7 text-ink/70">
               {detail.presentation.brief_sections.caveats}
             </p>
           </div>
@@ -718,7 +718,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
                       {grounding?.extractor ? <Badge variant="muted">{grounding.extractor}</Badge> : null}
                     </div>
                     <p className="mt-3 text-lg font-semibold text-ink">{source.title ?? source.domain ?? "Untitled source"}</p>
-                    <p className="mt-1 text-sm leading-6 text-ink/65">{source.excerpt}</p>
+                    <p className="mt-1 text-sm leading-6 text-ink/70">{source.excerpt}</p>
 
                     {passages.length ? (
                       <div className="mt-4 space-y-3">
@@ -735,20 +735,20 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
                           </button>
                         </div>
                         {passages.slice(0, 2).map((passage) => (
-                          <article key={passage.id} className="rounded-lg border border-black/10 bg-white/65 px-4 py-3">
+                          <article key={passage.id} className="rounded-lg border border-black/10 bg-white/70 px-4 py-3">
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge variant="muted">passage {passage.passage_index}</Badge>
                               <span className="text-[10px] uppercase tracking-[0.16em] text-ink/40">
                                 relevance {passage.relevance_score.toFixed(2)}
                               </span>
                             </div>
-                            <p className="mt-3 text-sm leading-6 text-ink/65">{passage.text}</p>
+                            <p className="mt-3 text-sm leading-6 text-ink/70">{passage.text}</p>
                           </article>
                         ))}
                       </div>
                     ) : null}
 
-                    <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-ink/55">
+                    <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-ink/60">
                       {grounding ? <span>{grounding.wordCount} words grounded</span> : null}
                       {source.url ? (
                         <Link href={source.url} target="_blank" className="font-medium text-pine">

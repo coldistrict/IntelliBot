@@ -135,7 +135,7 @@ export function MarketDetailClient({ polymarketId }: MarketDetailClientProps) {
             {market.category ? <Badge variant="muted">{market.category}</Badge> : null}
             {market.featured ? <Badge variant="warning">featured</Badge> : null}
           </div>
-          <h2 className="page-title">{market.title}</h2>
+          <h1 className="page-title">{market.title}</h1>
           {market.event_title ? (
             <p className="page-intro">{market.event_title}</p>
           ) : null}
@@ -206,7 +206,7 @@ export function MarketDetailClient({ polymarketId }: MarketDetailClientProps) {
             <p className="section-label">Resolution</p>
             <h3 className="mt-1.5 font-serif text-2xl text-ink">Rules</h3>
           </div>
-          <p className="whitespace-pre-wrap text-sm leading-7 text-ink/70">
+          <p className="whitespace-pre-wrap break-words text-sm leading-7 text-ink/70">
             {resolutionText}
           </p>
         </Panel>
@@ -216,7 +216,7 @@ export function MarketDetailClient({ polymarketId }: MarketDetailClientProps) {
             <p className="section-label">Market</p>
             <h3 className="mt-1.5 font-serif text-2xl text-ink">Context</h3>
           </div>
-          <div className="space-y-3 text-sm leading-7 text-ink/65">
+          <div className="space-y-3 break-words text-sm leading-7 text-ink/70">
             <p>{contextText}</p>
             <p>
               <span className="font-semibold text-ink">Spread:</span>{" "}

@@ -70,22 +70,22 @@ function AnalysisRow({ item }: { item: AnalysisSummary }) {
             <Badge variant="muted">{item.latest_confidence_label.replaceAll("_", " ")}</Badge>
           ) : null}
         </div>
-        <h3 className="mt-2 text-base font-semibold leading-6 text-ink">{item.input_text}</h3>
-        <p className="mt-1 max-w-4xl text-sm leading-6 text-ink/60">
+        <h3 className="mt-2 break-words text-base font-semibold leading-6 text-ink">{item.input_text}</h3>
+        <p className="mt-1 max-w-4xl break-words text-sm leading-6 text-ink/60">
           {item.display_summary ??
             item.current_stage_note ??
             "Open the run to watch the memo and inspector unlock."}
         </p>
       </div>
 
-      <div className="space-y-2 text-sm text-ink/55 md:text-right">
+      <div className="space-y-2 text-sm text-ink/60 md:text-right">
         <p className="font-medium text-ink/70">{new Date(item.updated_at).toLocaleString()}</p>
         <p className="capitalize">
           {item.mode} · {item.input_type}
         </p>
         {(item.status === "queued" || item.status === "running") && item.progress_percent !== null ? (
           <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-ink/45">
+            <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-ink/50">
               <span>{item.current_stage_label ?? "Queued"}</span>
               <span>{progressPercent}%</span>
             </div>
@@ -192,9 +192,9 @@ export function HistoryList() {
     <div className="space-y-6">
       <section className="max-w-5xl space-y-4">
         <p className="eyebrow">Research Log</p>
-        <h2 className="page-title">
+        <h1 className="page-title">
           Track what is still moving and what already resolved into a memo.
-        </h2>
+        </h1>
         <p className="page-intro">
           Running analyses stay visible with progress context, while completed runs compress into a
           denser reading log you can reopen at any time.
@@ -234,7 +234,7 @@ export function HistoryList() {
               type="button"
               onClick={resetFilters}
               disabled={!hasFilters}
-              className="secondary-action disabled:bg-white/45"
+              className="secondary-action disabled:bg-white/50"
             >
               Reset
             </button>
@@ -257,7 +257,7 @@ export function HistoryList() {
               </button>
             ))}
           </div>
-          <p className="text-sm text-ink/55">
+          <p className="text-sm text-ink/60">
             Showing {filteredItems.length} of {items.length} runs
           </p>
         </div>

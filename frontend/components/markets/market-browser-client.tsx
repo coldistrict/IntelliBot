@@ -189,7 +189,7 @@ export function MarketBrowserClient() {
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="space-y-4">
           <p className="eyebrow">Market Browser</p>
-          <h2 className="page-title">Find live Polymarket questions worth reading deeply.</h2>
+          <h1 className="page-title">Find live Polymarket questions worth reading deeply.</h1>
           <p className="page-intro">
             Browse public markets, inspect live pricing context, and send one into the research desk.
           </p>

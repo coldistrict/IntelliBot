@@ -137,7 +137,7 @@ export function ScoreboardClient() {
     <div className="space-y-6">
       <section className="max-w-5xl space-y-4">
         <p className="eyebrow">Scoreboard</p>
-        <h2 className="page-title">Did the desk actually call it? Track every resolved market.</h2>
+        <h1 className="page-title">Did the desk actually call it? Track every resolved market.</h1>
         <p className="page-intro">
           Once an analyzed market resolves on Polymarket, the run is scored against reality: Brier
           accuracy, direction hit rate, and the virtual P&amp;L of following every lean with $100.
@@ -169,7 +169,7 @@ export function ScoreboardClient() {
           <p className="section-label">Model vs market (Brier)</p>
           <p className="stat-number mt-2">
             {formatBrier(summary?.head_to_head_model_brier)}
-            <span className="text-base font-normal text-ink/55">
+            <span className="text-base font-normal text-ink/60">
               {" "}
               vs {formatBrier(summary?.head_to_head_market_brier)}
             </span>
@@ -319,7 +319,7 @@ export function ScoreboardClient() {
                       </td>
                       <td>
                         {row.direction_hit === null || row.direction_hit === undefined ? (
-                          <span className="text-ink/45">—</span>
+                          <span className="text-ink/50">—</span>
                         ) : row.direction_hit ? (
                           <Badge variant="yes">Hit</Badge>
                         ) : (

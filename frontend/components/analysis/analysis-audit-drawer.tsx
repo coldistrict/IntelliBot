@@ -63,7 +63,7 @@ function scrollToAuditTarget(focus: AuditFocus | null | undefined) {
   }
 
   window.requestAnimationFrame(() => {
-    document.getElementById(targetId)?.scrollIntoView({ block: "start", behavior: "smooth" });
+    document.getElementById(targetId)?.scrollIntoView?.({ block: "start", behavior: "smooth" });
   });
 }
 
@@ -145,7 +145,7 @@ export function AnalysisAuditDrawer({
                   Layered audit
                 </p>
                 <h2 className="font-serif text-3xl text-ink">How this was calculated</h2>
-                <p className="max-w-2xl text-sm leading-7 text-ink/65">
+                <p className="max-w-2xl text-sm leading-7 text-ink/70">
                   This inspector shows structured scoring, uncertainty, recommendation, and source
                   grounding details. It does not expose hidden model chain-of-thought.
                 </p>
@@ -189,16 +189,16 @@ export function AnalysisAuditDrawer({
                   </article>
                   <article className="rounded-lg border border-black/10 bg-white/75 p-4">
                     <p className="section-label">YES / NO conditions</p>
-                    <p className="mt-2 text-sm leading-7 text-ink/65">
+                    <p className="mt-2 text-sm leading-7 text-ink/70">
                       <span className="font-semibold text-ink">YES:</span> {audit.rule_interpretation.yes_condition}
                     </p>
-                    <p className="mt-2 text-sm leading-7 text-ink/65">
+                    <p className="mt-2 text-sm leading-7 text-ink/70">
                       <span className="font-semibold text-ink">NO:</span> {audit.rule_interpretation.no_condition}
                     </p>
                   </article>
                   <article className="rounded-lg border border-black/10 bg-white/75 p-4">
                     <p className="section-label">Evidence mix</p>
-                    <div className="mt-3 space-y-2 text-sm text-ink/65">
+                    <div className="mt-3 space-y-2 text-sm text-ink/70">
                       <p>Prior: {formatPercent(audit.probability?.prior_probability)}</p>
                       <p>Non-social evidence: {audit.probability ? formatSigned(audit.probability.non_social_evidence) : "Unavailable"}</p>
                       <p>Capped social evidence: {audit.probability ? formatSigned(audit.probability.capped_social_evidence) : "Unavailable"}</p>
@@ -215,7 +215,7 @@ export function AnalysisAuditDrawer({
                   </article>
                   <article className="rounded-lg border border-black/10 bg-white/75 p-4">
                     <p className="section-label">Source lanes</p>
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-ink/65">
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-ink/70">
                       <p>Official: {audit.source_lanes.official}</p>
                       <p>News: {audit.source_lanes.news}</p>
                       <p>Premium: {audit.source_lanes.premium}</p>
@@ -344,7 +344,7 @@ export function AnalysisAuditDrawer({
                                       relevance {passage.relevance_score.toFixed(2)}
                                     </span>
                                   </div>
-                                  <p className="mt-3 text-sm leading-7 text-ink/65">{passage.text}</p>
+                                  <p className="mt-3 text-sm leading-7 text-ink/70">{passage.text}</p>
                                 </article>
                               ))}
                             </div>
