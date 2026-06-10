@@ -98,8 +98,14 @@ export function DeskLaunchpad() {
 
           <div className="flex flex-wrap items-center gap-3">
             <Link
-              href="/manual"
+              href="/markets"
               className="primary-action w-full sm:w-auto"
+            >
+              Browse markets
+            </Link>
+            <Link
+              href="/manual"
+              className="secondary-action w-full sm:w-auto"
             >
               Start a manual analysis
             </Link>

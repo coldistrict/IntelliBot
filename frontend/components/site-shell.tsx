@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 
 const links = [
   { href: "/", label: "Overview" },
+  { href: "/markets", label: "Markets" },
   { href: "/manual", label: "Manual" },
   { href: "/history", label: "History" },
   { href: "/settings", label: "Settings" },
@@ -18,7 +19,11 @@ type SiteShellProps = {
 
 export function SiteShell({ children }: SiteShellProps) {
   const pathname = usePathname();
-  const activeHref = pathname.startsWith("/analyses") ? "/history" : pathname;
+  const activeHref = pathname.startsWith("/analyses")
+    ? "/history"
+    : pathname.startsWith("/markets")
+      ? "/markets"
+      : pathname;
 
   return (
     <div className="min-h-screen bg-canvas">

@@ -157,6 +157,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/markets/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Discover Markets */
+        get: operations["discover_markets_api_markets_discover_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/markets/remote/{polymarket_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Public Market */
+        get: operations["get_public_market_api_markets_remote__polymarket_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/markets/{market_id}": {
         parameters: {
             query?: never;
@@ -807,6 +841,62 @@ export interface components {
             /** Search Configured */
             search_configured: boolean;
         };
+        /** PublicMarketListResponse */
+        PublicMarketListResponse: {
+            /** Items */
+            items: components["schemas"]["PublicMarketResponse"][];
+            /** Total */
+            total: number;
+        };
+        /** PublicMarketResponse */
+        PublicMarketResponse: {
+            /** Category */
+            category?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Event Slug */
+            event_slug?: string | null;
+            /** Event Title */
+            event_title?: string | null;
+            /** Expiry At */
+            expiry_at?: string | null;
+            /**
+             * Featured
+             * @default false
+             */
+            featured: boolean;
+            /** Image */
+            image?: string | null;
+            /**
+             * Is New
+             * @default false
+             */
+            is_new: boolean;
+            /** Liquidity */
+            liquidity?: number | null;
+            /** No Ask */
+            no_ask?: number | null;
+            /** No Bid */
+            no_bid?: number | null;
+            /** Polymarket Id */
+            polymarket_id: string;
+            /** Rules Text */
+            rules_text?: string | null;
+            /** Spread */
+            spread?: number | null;
+            /** Status */
+            status?: string | null;
+            /** Title */
+            title: string;
+            /** Url */
+            url?: string | null;
+            /** Volume 24H */
+            volume_24h?: number | null;
+            /** Yes Ask */
+            yes_ask?: number | null;
+            /** Yes Bid */
+            yes_bid?: number | null;
+        };
         /**
          * QualitativeLabelEnum
          * @enum {string}
@@ -1409,6 +1499,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discover_markets_api_markets_discover_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                view?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicMarketListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_public_market_api_markets_remote__polymarket_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                polymarket_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicMarketResponse"];
                 };
             };
             /** @description Validation Error */
