@@ -70,9 +70,9 @@ def build_scoreboard(session: Session) -> CalibrationScoreboardResponse:
 def _resolved_row(run: AnalysisRun, market: Market) -> ResolvedRunRow:
     outcome_value = 1.0 if market.resolved_outcome == "yes" else 0.0
 
-    model_brier = round((run.p_hat - outcome_value) ** 2, 4) if run.p_hat is not None else None
+    model_brier = _round_score((run.p_hat - outcome_value) ** 2) if run.p_hat is not None else None
     market_brier = (
-        round((run.market_mid_prob - outcome_value) ** 2, 4)
+        _round_score((run.market_mid_prob - outcome_value) ** 2)
         if run.market_mid_prob is not None
         else None
     )
@@ -220,10 +220,16 @@ def _slices(
 def _average(values: list[float]) -> float | None:
     if not values:
         return None
-    return round(sum(values) / len(values), 4)
+    return _round_score(sum(values) / len(values))
 
 
 def _rate(hits: int, total: int) -> float | None:
     if total == 0:
         return None
     return round(hits / total, 4)
+
+
+def _round_score(value: float) -> float:
+    if 0.0 < value < 0.001:
+        return value
+    return round(value, 4)

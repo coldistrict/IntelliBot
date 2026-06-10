@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.main import app
 from app.api.routes.markets import get_polymarket_client
 from app.clients.polymarket_client import ResolvedMarketRecord
-from app.models import AnalysisRequest, AnalysisRun, Market, RuleParse
+from app.models import AnalysisRequest, AnalysisRun, Market, Recommendation, RuleParse
 from app.models.enums import (
     ClaimFamilyEnum,
     ConfidenceLabelEnum,
@@ -15,6 +15,7 @@ from app.models.enums import (
     ModeEnum,
     NarrativePhaseEnum,
     PricedInRiskLabelEnum,
+    QualitativeLabelEnum,
     RecommendationLabelEnum,
     RequestStatusEnum,
     SourceTierEnum,
@@ -734,6 +735,121 @@ def test_completed_detail_ignores_newer_incomplete_run_shell(
     assert detail_payload["latest_run"]["p_hat"] == 0.889
     assert detail_payload["latest_run"]["final_summary"] == "Completed run summary."
     assert "Completed run summary" in detail_payload["display_summary"]
+
+
+def test_detail_uses_numeric_read_when_stored_brief_conflicts(
+    client,
+    session_factory: sessionmaker[Session],
+):
+    now = datetime.now(UTC)
+    with session_factory() as session:
+        market = Market(
+            polymarket_id="resolved-yes-market",
+            title="Resolved YES market?",
+            url="https://polymarket.com/event/resolved-yes-market",
+            rules_text="Sample rules",
+            description="Sample market",
+            yes_bid=0.99,
+            yes_ask=1.0,
+            no_bid=0.0,
+            no_ask=0.01,
+            liquidity=1000,
+            volume_24h=100,
+            spread=0.01,
+            status="closed",
+        )
+        session.add(market)
+        session.commit()
+        session.refresh(market)
+
+        request = AnalysisRequest(
+            mode=ModeEnum.MANUAL,
+            input_type=InputTypeEnum.MARKET_ID,
+            input_text=market.polymarket_id,
+            input_payload={},
+            progress_json=initial_progress_payload(now),
+            market_id=market.id,
+            status=RequestStatusEnum.COMPLETE,
+            current_stage="complete",
+            started_at=now,
+            completed_at=now,
+        )
+        mark_stage_complete(request, "complete", "Analysis complete.", now=now)
+        session.add(request)
+        session.commit()
+        session.refresh(request)
+
+        rule_parse = RuleParse(
+            analysis_request_id=request.id,
+            market_id=market.id,
+            question_text=market.title,
+            event=market.title,
+            entity_names=["Example"],
+            action="resolve yes",
+            claim_family=ClaimFamilyEnum.OFFICIAL_EVENT,
+            yes_condition="YES if the event happens.",
+            no_condition="NO if the event does not happen.",
+            deadline_text=None,
+            resolution_definition="Resolves YES if the event happens.",
+            directional_scoring_policy={},
+            official_domains=[],
+            fallback_sources=[],
+            ambiguity_flags=[],
+            clarity_score=0.8,
+            resolution_risk=0.2,
+            suitable_for_auto=False,
+            template_detected=TemplateKey.OFFICIAL_EVENT,
+            created_at=now,
+        )
+        session.add(rule_parse)
+        session.commit()
+        session.refresh(rule_parse)
+
+        run = AnalysisRun(
+            request_id=request.id,
+            market_id=market.id,
+            rule_parse_id=rule_parse.id,
+            template_selected=TemplateKey.OFFICIAL_EVENT,
+            market_mid_prob=0.995,
+            yes_exec_price=1.0,
+            no_exec_price=0.01,
+            priced_in_risk_label=PricedInRiskLabelEnum.LOW,
+            numeric_estimate_available=True,
+            numeric_estimate_reason=None,
+            qualitative_label=QualitativeLabelEnum.LEANS_NO,
+            p_hat=0.9994,
+            p_low=0.85,
+            p_high=0.99,
+            confidence_label=ConfidenceLabelEnum.MEDIUM,
+            recommendation_label=RecommendationLabelEnum.NO_EDGE,
+            final_summary="The current decision read is NO, despite p_hat 0.9994.",
+            created_at=now,
+        )
+        session.add(run)
+        session.commit()
+        session.refresh(run)
+        session.add(
+            Recommendation(
+                analysis_run_id=run.id,
+                recommendation_label=RecommendationLabelEnum.NO_EDGE,
+                confidence_label=ConfidenceLabelEnum.MEDIUM,
+                edge_yes=-0.02,
+                edge_no=-0.02,
+                rationale_json={},
+                created_at=now,
+            )
+        )
+        session.commit()
+        analysis_id = request.id
+
+    detail_response = client.get(f"/api/analyses/{analysis_id}")
+
+    assert detail_response.status_code == 200
+    detail_payload = detail_response.json()
+    assert detail_payload["presentation"]["headline"] == "Resolved YES market?"
+    assert "YES is more likely" in detail_payload["display_summary"]
+    assert "decision read is NO" not in detail_payload["presentation"]["brief_sections"]["what_it_means"]
+    assert "YES is more likely" in detail_payload["presentation"]["brief_sections"]["what_it_means"]
 
 
 def test_live_social_intelligence_groups_trusted_timeline_and_supporting_social(

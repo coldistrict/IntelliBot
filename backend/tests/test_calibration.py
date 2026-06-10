@@ -317,3 +317,23 @@ def test_scoreboard_empty_state(client):
     assert payload["summary"]["direction_hit_rate"] is None
     assert payload["resolved"] == []
     assert payload["pending"] == []
+
+
+def test_scoreboard_preserves_tiny_nonzero_briers(client, session_factory: sessionmaker[Session]):
+    with session_factory() as session:
+        market = _seed_market(
+            session,
+            polymarket_id="tiny-brier",
+            title="Tiny Brier market",
+            resolved_outcome="yes",
+        )
+        _seed_completed_run(session, market=market, p_hat=0.9994, market_mid_prob=0.9995)
+
+    response = client.get("/api/calibration/scoreboard")
+
+    assert response.status_code == 200
+    payload = response.json()
+    row = payload["resolved"][0]
+    assert 0 < row["model_brier"] < 0.001
+    assert 0 < row["market_brier"] < 0.001
+    assert 0 < payload["summary"]["avg_model_brier"] < 0.001
