@@ -32,6 +32,13 @@ export type ManualAnalysisPayload = Schema<"ManualAnalysisCreateRequest">;
 export type QueuedAnalysisResponse = Schema<"AnalysisQueuedResponse">;
 export type PublicMarket = Schema<"PublicMarketResponse">;
 export type PublicMarketList = Schema<"PublicMarketListResponse">;
+export type CalibrationScoreboard = Schema<"CalibrationScoreboardResponse">;
+export type CalibrationSummary = Schema<"ScoreboardSummary">;
+export type CalibrationBucket = Schema<"CalibrationBucket">;
+export type CalibrationSlice = Schema<"SliceStats">;
+export type ResolvedRunRow = Schema<"ResolvedRunRow">;
+export type PendingRunRow = Schema<"PendingRunRow">;
+export type OutcomeRefreshSummary = Schema<"OutcomeRefreshResponse">;
 
 function extractValidationMessage(detail: unknown): string | null {
   if (!Array.isArray(detail) || detail.length === 0) {
@@ -159,4 +166,14 @@ export async function fetchPublicMarkets(params?: {
 
 export async function fetchPublicMarket(polymarketId: string): Promise<PublicMarket> {
   return fetchJson<PublicMarket>(`/api/markets/remote/${encodeURIComponent(polymarketId)}`);
+}
+
+export async function fetchCalibrationScoreboard(): Promise<CalibrationScoreboard> {
+  return fetchJson<CalibrationScoreboard>("/api/calibration/scoreboard");
+}
+
+export async function refreshCalibrationOutcomes(): Promise<OutcomeRefreshSummary> {
+  return fetchJson<OutcomeRefreshSummary>("/api/calibration/refresh", {
+    method: "POST",
+  });
 }

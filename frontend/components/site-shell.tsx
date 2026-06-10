@@ -10,6 +10,7 @@ const links = [
   { href: "/markets", label: "Markets" },
   { href: "/manual", label: "Manual" },
   { href: "/history", label: "History" },
+  { href: "/scoreboard", label: "Scoreboard" },
   { href: "/settings", label: "Settings" },
 ];
 
