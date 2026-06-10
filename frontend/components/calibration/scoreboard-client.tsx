@@ -24,12 +24,22 @@ function formatProbability(value: number | null | undefined) {
   if (value === null || value === undefined) {
     return "—";
   }
-  return `${(value * 100).toFixed(0)}%`;
+  const percent = value * 100;
+  if (percent > 99 && percent < 100) {
+    return ">99%";
+  }
+  if (percent > 0 && percent < 1) {
+    return "<1%";
+  }
+  return `${percent.toFixed(0)}%`;
 }
 
 function formatBrier(value: number | null | undefined) {
   if (value === null || value === undefined) {
     return "—";
+  }
+  if (value > 0 && value < 0.001) {
+    return "<0.001";
   }
   return value.toFixed(3);
 }
