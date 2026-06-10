@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
@@ -23,6 +24,12 @@ from app.models.enums import (
 )
 
 
+class DirectionalScoringPolicyDraft(TypedDict):
+    allowed_roles: list[EvidenceRoleEnum]
+    commentary_mode: Literal["none", "expert_only", "bounded"]
+    procedural_mode: Literal["uncertainty_only"]
+
+
 class RuleParseDraft(BaseModel):
     question_text: str
     event: str
@@ -35,7 +42,7 @@ class RuleParseDraft(BaseModel):
     deadline_utc: datetime | None = None
     timezone_text: str | None = None
     resolution_definition: str | None = None
-    directional_scoring_policy: dict = Field(default_factory=dict)
+    directional_scoring_policy: DirectionalScoringPolicyDraft
     official_resolution_source: str | None = None
     fallback_sources: list[str] = Field(default_factory=list)
     official_domains: list[str] = Field(default_factory=list)

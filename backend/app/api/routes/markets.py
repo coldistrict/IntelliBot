@@ -3,11 +3,98 @@ from sqlalchemy.orm import Session
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.clients.polymarket_client import PolymarketClient, ResolvedMarketRecord
 from app.db.session import get_db_session
 from app.models import Market
-from app.schemas.market import MarketListResponse, MarketResponse
+from app.schemas.market import (
+    MarketListResponse,
+    MarketResponse,
+    PublicMarketListResponse,
+    PublicMarketResponse,
+)
 
 router = APIRouter(prefix="/markets")
+
+
+def get_polymarket_client() -> PolymarketClient:
+    return PolymarketClient(enabled=True)
+
+
+def _public_market_response(record: ResolvedMarketRecord) -> PublicMarketResponse:
+    return PublicMarketResponse(
+        polymarket_id=record.polymarket_id,
+        title=record.title,
+        url=record.url,
+        rules_text=record.rules_text,
+        description=record.description,
+        yes_bid=record.yes_bid,
+        yes_ask=record.yes_ask,
+        no_bid=record.no_bid,
+        no_ask=record.no_ask,
+        liquidity=record.liquidity,
+        volume_24h=record.volume_24h,
+        spread=record.spread,
+        expiry_at=record.expiry_at,
+        status=record.status,
+        category=record.category,
+        event_title=record.event_title,
+        event_slug=record.event_slug,
+        image=record.image,
+        featured=record.featured,
+        is_new=record.is_new,
+    )
+
+
+def _record_from_market(market: Market) -> ResolvedMarketRecord:
+    return ResolvedMarketRecord(
+        polymarket_id=market.polymarket_id,
+        title=market.title,
+        url=market.url,
+        rules_text=market.rules_text,
+        description=market.description,
+        yes_bid=market.yes_bid,
+        yes_ask=market.yes_ask,
+        no_bid=market.no_bid,
+        no_ask=market.no_ask,
+        liquidity=market.liquidity,
+        volume_24h=market.volume_24h,
+        spread=market.spread,
+        expiry_at=market.expiry_at,
+        status=market.status,
+    )
+
+
+@router.get("/discover", response_model=PublicMarketListResponse)
+def discover_markets(
+    q: str | None = Query(default=None, max_length=200),
+    view: str = Query(
+        default="popular",
+        pattern="^(popular|trending|liquidity|closing_soon|newest)$",
+    ),
+    limit: int = Query(default=25, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+    client: PolymarketClient = Depends(get_polymarket_client),
+) -> PublicMarketListResponse:
+    records = client.discover_markets(query=q, view=view, limit=limit, offset=offset)
+    return PublicMarketListResponse(
+        items=[_public_market_response(record) for record in records],
+        total=len(records),
+    )
+
+
+@router.get("/remote/{polymarket_id}", response_model=PublicMarketResponse)
+def get_public_market(
+    polymarket_id: str,
+    session: Session = Depends(get_db_session),
+    client: PolymarketClient = Depends(get_polymarket_client),
+) -> PublicMarketResponse:
+    record = client.get_market_by_id(polymarket_id)
+    if record is None:
+        local_market = session.scalar(select(Market).where(Market.polymarket_id == polymarket_id))
+        record = _record_from_market(local_market) if local_market else None
+    if record is None:
+        raise HTTPException(status_code=404, detail="Polymarket market not found.")
+    return _public_market_response(record)
 
 
 @router.get("", response_model=MarketListResponse)
@@ -29,4 +116,3 @@ def get_market(market_id: int, session: Session = Depends(get_db_session)) -> Ma
     if market is None:
         raise HTTPException(status_code=404, detail="Market not found.")
     return MarketResponse.model_validate(market)
-

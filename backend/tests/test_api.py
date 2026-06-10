@@ -3,6 +3,8 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.main import app
+from app.api.routes.markets import get_polymarket_client
+from app.clients.polymarket_client import ResolvedMarketRecord
 from app.models import AnalysisRequest, AnalysisRun, Market, RuleParse
 from app.models.enums import (
     ClaimFamilyEnum,
@@ -242,6 +244,89 @@ def test_manual_analysis_links_existing_market(client, session_factory: sessionm
     market_payload = market_response.json()
     assert market_payload["total"] == 1
     assert market_payload["items"][0]["polymarket_id"] == "fed-cut-june-2026"
+
+
+def test_public_market_discovery_lists_remote_polymarket_markets(client):
+    class StubPolymarketClient:
+        def discover_markets(self, *, query=None, view="popular", limit=25, offset=0):
+            assert query is None
+            assert view == "popular"
+            assert limit == 2
+            assert offset == 0
+            return [
+                ResolvedMarketRecord(
+                    polymarket_id="bitcoin-100k-2026",
+                    title="Will Bitcoin hit $100k in 2026?",
+                    url="https://polymarket.com/event/bitcoin-100k-2026",
+                    rules_text="Resolves YES if Bitcoin trades above $100k in 2026.",
+                    description="Crypto market",
+                    yes_bid=0.41,
+                    yes_ask=0.43,
+                    no_bid=0.57,
+                    no_ask=0.59,
+                    liquidity=150000,
+                    volume_24h=42000,
+                    spread=0.02,
+                    expiry_at=None,
+                    status="active",
+                    category="Crypto",
+                    event_title="Bitcoin milestone markets",
+                    event_slug="bitcoin-100k-2026",
+                    image="https://example.com/bitcoin.png",
+                    featured=True,
+                )
+            ]
+
+    app.dependency_overrides[get_polymarket_client] = lambda: StubPolymarketClient()
+
+    response = client.get("/api/markets/discover?view=popular&limit=2")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["polymarket_id"] == "bitcoin-100k-2026"
+    assert payload["items"][0]["category"] == "Crypto"
+    assert payload["items"][0]["featured"] is True
+    assert payload["items"][0]["yes_ask"] == 0.43
+
+
+def test_public_market_detail_falls_back_to_local_cache(
+    client,
+    session_factory: sessionmaker[Session],
+):
+    class StubPolymarketClient:
+        def get_market_by_id(self, market_id: str):
+            assert market_id == "fed-cut-june-2026"
+            return None
+
+    with session_factory() as session:
+        session.add(
+            Market(
+                polymarket_id="fed-cut-june-2026",
+                title="Will the Fed cut by June 2026?",
+                url="https://polymarket.com/event/fed-cut-june-2026",
+                rules_text="Sample rules",
+                description="Sample market",
+                yes_bid=0.41,
+                yes_ask=0.43,
+                no_bid=0.57,
+                no_ask=0.59,
+                liquidity=25000,
+                volume_24h=5000,
+                spread=0.02,
+                status="active",
+            )
+        )
+        session.commit()
+
+    app.dependency_overrides[get_polymarket_client] = lambda: StubPolymarketClient()
+
+    response = client.get("/api/markets/remote/fed-cut-june-2026")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["polymarket_id"] == "fed-cut-june-2026"
+    assert payload["title"] == "Will the Fed cut by June 2026?"
 
 
 def test_review_accepts_completed_run(client):

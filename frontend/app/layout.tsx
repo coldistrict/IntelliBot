@@ -1,17 +1,6 @@
 import type { Metadata } from "next";
-import { Inter, Newsreader } from "next/font/google";
 import { SiteShell } from "@/components/site-shell";
 import "./globals.css";
-
-const sans = Inter({
-  subsets: ["latin"],
-  variable: "--font-sans",
-});
-
-const serif = Newsreader({
-  subsets: ["latin"],
-  variable: "--font-serif",
-});
 
 export const metadata: Metadata = {
   title: "Polymarket Copilot v1",
@@ -24,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${sans.variable} ${serif.variable}`}>
+    <html lang="en">
       <body className="bg-canvas text-ink antialiased">
         <SiteShell>{children}</SiteShell>
       </body>
