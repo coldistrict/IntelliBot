@@ -39,11 +39,15 @@ function CompactRunRow({ item }: { item: AnalysisSummary }) {
     <Link href={`/analyses/${item.id}`} className="surface-row block transition hover:bg-black/[0.015]">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={analysisBadge(item)}>{item.status}</Badge>
-        {item.template_selected ? <Badge variant="muted">{item.template_selected}</Badge> : null}
-        {item.latest_confidence_label ? <Badge variant="muted">{item.latest_confidence_label}</Badge> : null}
+        {item.template_selected ? (
+          <Badge variant="muted">{item.template_selected.replaceAll("_", " ")}</Badge>
+        ) : null}
+        {item.latest_confidence_label ? (
+          <Badge variant="muted">{item.latest_confidence_label.replaceAll("_", " ")}</Badge>
+        ) : null}
       </div>
       <h4 className="mt-2 line-clamp-2 text-base font-semibold leading-6 text-ink">{item.input_text}</h4>
-      <p className="mt-1 line-clamp-2 text-sm leading-6 text-ink/62">{statusCopy(item)}</p>
+      <p className="mt-1 line-clamp-2 text-sm leading-6 text-ink/60">{statusCopy(item)}</p>
     </Link>
   );
 }
@@ -120,20 +124,20 @@ export function DeskLaunchpad() {
           <div className="grid gap-3 sm:grid-cols-3">
             <Panel className="p-4">
               <p className="section-label">Active</p>
-              <p className="mt-2 text-3xl font-semibold text-ink">{running.length}</p>
-              <p className="mt-1 text-sm text-ink/58">Queued or running</p>
+              <p className="stat-number mt-2">{running.length}</p>
+              <p className="mt-1 text-sm text-ink/60">Queued or running</p>
             </Panel>
             <Panel className="p-4">
               <p className="section-label">Recent</p>
-              <p className="mt-2 text-3xl font-semibold text-ink">{recent.length}</p>
-              <p className="mt-1 text-sm text-ink/58">Finished memos shown</p>
+              <p className="stat-number mt-2">{recent.length}</p>
+              <p className="mt-1 text-sm text-ink/60">Finished memos shown</p>
             </Panel>
             <Panel className="p-4">
               <p className="section-label">Core path</p>
-              <p className="mt-2 text-3xl font-semibold text-ink">
+              <p className="stat-number mt-2">
                 {status ? (coreReady ? "Ready" : "Setup") : "Check"}
               </p>
-              <p className="mt-1 text-sm text-ink/58">
+              <p className="mt-1 text-sm text-ink/60">
                 {status ? `${readyCount}/${rows.length} providers available` : "Checking providers"}
               </p>
             </Panel>
@@ -141,7 +145,7 @@ export function DeskLaunchpad() {
         </div>
 
         <Panel className="space-y-4 p-5">
-          <div className="border-b border-black/8 pb-3">
+          <div className="border-b border-black/10 pb-3">
             <p className="section-label">Readiness</p>
             <h3 className="mt-1.5 font-serif text-2xl text-ink">Providers</h3>
           </div>
@@ -151,7 +155,7 @@ export function DeskLaunchpad() {
                 <div key={label} className="surface-row flex items-center justify-between gap-4">
                   <div>
                     <p className="text-sm font-semibold text-ink">{label}</p>
-                    <p className="mt-0.5 text-sm text-ink/58">
+                    <p className="mt-0.5 text-sm text-ink/60">
                       {ready ? "Configured" : "Needs setup"}
                     </p>
                   </div>
@@ -159,7 +163,7 @@ export function DeskLaunchpad() {
                 </div>
               ))
             ) : (
-              <p className="text-sm leading-7 text-ink/58">Loading provider readiness…</p>
+              <p className="text-sm leading-7 text-ink/60">Loading provider readiness…</p>
             )}
           </div>
         </Panel>
@@ -167,7 +171,7 @@ export function DeskLaunchpad() {
 
       <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <Panel className="space-y-4 p-5">
-          <div className="flex items-center justify-between gap-4 border-b border-black/8 pb-3">
+          <div className="flex items-center justify-between gap-4 border-b border-black/10 pb-3">
             <div>
               <p className="section-label">Active</p>
               <h3 className="mt-1.5 font-serif text-2xl text-ink">Runs in motion</h3>
@@ -181,7 +185,7 @@ export function DeskLaunchpad() {
               running.map((item) => <CompactRunRow key={item.id} item={item} />)
             ) : (
               <div className="py-5">
-                <p className="text-sm leading-7 text-ink/58">
+                <p className="text-sm leading-7 text-ink/60">
                   No active analyses right now. Start one from Manual Analysis.
                 </p>
                 <Link href="/manual" className="mt-3 secondary-action">
@@ -193,7 +197,7 @@ export function DeskLaunchpad() {
         </Panel>
 
         <Panel className="space-y-4 p-5">
-          <div className="border-b border-black/8 pb-3">
+          <div className="border-b border-black/10 pb-3">
             <p className="section-label">Recent</p>
             <h3 className="mt-1.5 font-serif text-2xl text-ink">Latest completed memos</h3>
           </div>
@@ -202,7 +206,7 @@ export function DeskLaunchpad() {
               recent.map((item) => <CompactRunRow key={item.id} item={item} />)
             ) : (
               <div className="py-5">
-                <p className="text-sm leading-7 text-ink/58">
+                <p className="text-sm leading-7 text-ink/60">
                   Completed analyses will show up here once you start using the desk.
                 </p>
               </div>

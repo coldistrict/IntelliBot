@@ -125,7 +125,7 @@ export function ManualAnalysisForm() {
 
       <Panel className="overflow-hidden p-0">
         <form className="space-y-0" onSubmit={handleSubmit}>
-          <section className="space-y-5 border-b border-black/8 p-5 md:p-6">
+          <section className="space-y-5 border-b border-black/10 p-5 md:p-6">
             <div className="flex flex-wrap gap-2">
               <Badge variant="yes">Memo-first workflow</Badge>
               <Badge variant="muted">Live X intelligence available</Badge>
@@ -144,7 +144,7 @@ export function ManualAnalysisForm() {
                     className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
                       inputMode === value
                         ? "bg-ink text-white shadow-sm"
-                        : "text-ink/62 hover:bg-white/80 hover:text-ink"
+                        : "text-ink/60 hover:bg-white/80 hover:text-ink"
                     }`}
                   >
                     {label}
@@ -169,7 +169,7 @@ export function ManualAnalysisForm() {
                       : "https://polymarket.com/event/fed-cut-june-2026"
                 }
               />
-              <div className="mt-2 flex flex-col gap-1 text-sm leading-6 text-ink/58 sm:flex-row sm:items-center sm:justify-between">
+              <div className="mt-2 flex flex-col gap-1 text-sm leading-6 text-ink/60 sm:flex-row sm:items-center sm:justify-between">
                 <p>{helperText}</p>
                 <p className="text-xs uppercase tracking-[0.14em] text-ink/40">{primaryValue.trim().length} chars</p>
               </div>
@@ -198,7 +198,7 @@ export function ManualAnalysisForm() {
               <p className="section-label">
                 Analysis settings
               </p>
-              <span className="text-sm text-ink/54">Keep this compact unless the claim needs extra framing.</span>
+              <span className="text-sm text-ink/55">Keep this compact unless the claim needs extra framing.</span>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
@@ -240,7 +240,7 @@ export function ManualAnalysisForm() {
                 />
                 <div className="ml-3">
                   <p className="text-sm font-semibold text-ink">Include live X intelligence</p>
-                  <p className="mt-1 text-xs leading-6 text-ink/56">
+                  <p className="mt-1 text-xs leading-6 text-ink/55">
                     Grok searches live X and web context for trusted accounts and narrative shifts.
                   </p>
                 </div>
@@ -255,7 +255,7 @@ export function ManualAnalysisForm() {
                 />
                 <div className="ml-3">
                   <p className="text-sm font-semibold text-ink">Enable premium retrieval</p>
-                  <p className="mt-1 text-xs leading-6 text-ink/56">
+                  <p className="mt-1 text-xs leading-6 text-ink/55">
                     Allow paywalled premium-news search results into the source set when they are relevant.
                   </p>
                 </div>
@@ -273,7 +273,7 @@ export function ManualAnalysisForm() {
             <div className="grid gap-5 lg:grid-cols-2">
               <div>
                 <p className="text-sm font-semibold text-ink">What happens next</p>
-                <p className="mt-2 text-sm leading-7 text-ink/62">
+                <p className="mt-2 text-sm leading-7 text-ink/60">
                   You’ll land on a live memo page that keeps the structure visible while the run is
                   still working. Rules, sources, factors, and the audit inspector unlock as soon as
                   each artifact is ready.
@@ -281,7 +281,7 @@ export function ManualAnalysisForm() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-ink">Tips for stronger inputs</p>
-                <p className="mt-2 text-sm leading-7 text-ink/62">
+                <p className="mt-2 text-sm leading-7 text-ink/60">
                   Use a direct claim, add a deadline if it matters, and let Grok handle live X
                   discovery instead of hand-curating posts.
                 </p>
@@ -289,7 +289,7 @@ export function ManualAnalysisForm() {
             </div>
 
             <div className="sticky bottom-4 flex flex-col gap-3 rounded-lg border border-black/10 bg-white/95 px-4 py-4 shadow-panel backdrop-blur-sm md:flex-row md:items-center md:justify-between">
-              <p className="text-sm leading-7 text-ink/62">
+              <p className="text-sm leading-7 text-ink/60">
                 The composer is intentionally compact. Most of the product value should happen on
                 the live analysis page, not here.
               </p>

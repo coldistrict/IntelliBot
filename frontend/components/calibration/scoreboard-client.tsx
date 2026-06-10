@@ -54,7 +54,7 @@ function formatPnl(value: number | null | undefined) {
 
 function pnlTone(value: number | null | undefined) {
   if (value === null || value === undefined || value === 0) {
-    return "text-ink/62";
+    return "text-ink/60";
   }
   return value > 0 ? "text-pine" : "text-ember";
 }
@@ -152,29 +152,29 @@ export function ScoreboardClient() {
           >
             {isRefreshing ? "Checking resolutions..." : "Check for resolutions"}
           </button>
-          {refreshNote ? <p className="text-sm text-ink/62">{refreshNote}</p> : null}
+          {refreshNote ? <p className="text-sm text-ink/60">{refreshNote}</p> : null}
         </div>
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Panel className="p-4">
           <p className="section-label">Resolved runs</p>
-          <p className="mt-2 text-3xl font-semibold text-ink">{summary?.resolved_runs ?? 0}</p>
-          <p className="mt-1 text-sm text-ink/58">
+          <p className="stat-number mt-2">{summary?.resolved_runs ?? 0}</p>
+          <p className="mt-1 text-sm text-ink/60">
             {summary?.pending_runs ?? 0} awaiting resolution · {summary?.unlinked_runs ?? 0} without
             a linked market
           </p>
         </Panel>
         <Panel className="p-4">
           <p className="section-label">Model vs market (Brier)</p>
-          <p className="mt-2 text-3xl font-semibold text-ink">
+          <p className="stat-number mt-2">
             {formatBrier(summary?.head_to_head_model_brier)}
             <span className="text-base font-normal text-ink/55">
               {" "}
               vs {formatBrier(summary?.head_to_head_market_brier)}
             </span>
           </p>
-          <p className="mt-1 text-sm text-ink/58">
+          <p className="mt-1 text-sm text-ink/60">
             {headToHeadDelta === null
               ? "Needs resolved runs with a market prior"
               : headToHeadDelta > 0
@@ -186,19 +186,24 @@ export function ScoreboardClient() {
         </Panel>
         <Panel className="p-4">
           <p className="section-label">Direction hit rate</p>
-          <p className="mt-2 text-3xl font-semibold text-ink">
+          <p className="stat-number mt-2">
             {formatPercent(summary?.direction_hit_rate)}
           </p>
-          <p className="mt-1 text-sm text-ink/58">
+          <p className="mt-1 text-sm text-ink/60">
             {summary?.direction_calls ?? 0} directional call(s) scored
           </p>
         </Panel>
         <Panel className="p-4">
           <p className="section-label">Virtual P&amp;L</p>
-          <p className={cn("mt-2 text-3xl font-semibold", pnlTone(summary?.total_pnl))}>
+          <p
+            className={cn(
+              "mt-2 font-serif text-4xl font-medium leading-none tracking-[-0.01em] lining-nums tabular-nums",
+              pnlTone(summary?.total_pnl),
+            )}
+          >
             {formatPnl(summary?.total_pnl ?? 0)}
           </p>
-          <p className="mt-1 text-sm text-ink/58">
+          <p className="mt-1 text-sm text-ink/60">
             {summary?.trade_count ?? 0} virtual trade(s) · {summary?.trade_wins ?? 0} won ·{" "}
             {summary?.roi_per_trade !== null && summary?.roi_per_trade !== undefined
               ? `${(summary.roi_per_trade * 100).toFixed(1)}% per trade`
@@ -209,12 +214,12 @@ export function ScoreboardClient() {
 
       {!hasLoaded ? (
         <Panel className="p-7">
-          <p className="text-sm leading-7 text-ink/58">Loading the scoreboard...</p>
+          <p className="text-sm leading-7 text-ink/60">Loading the scoreboard...</p>
         </Panel>
       ) : !hasResolved ? (
         <Panel className="p-7">
           <p className="section-label">No resolved markets yet</p>
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-ink/62">
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-ink/60">
             Run analyses against live Polymarket markets, then come back after they resolve. Use
             “Check for resolutions” any time — once a market closes with a final outcome, the run is
             scored here automatically. Custom claims without a linked market cannot be scored.
@@ -223,29 +228,29 @@ export function ScoreboardClient() {
       ) : (
         <>
           <Panel className="p-5">
-            <div className="border-b border-black/8 pb-3">
+            <div className="border-b border-black/10 pb-3">
               <p className="section-label">Calibration</p>
               <h3 className="mt-1.5 font-serif text-2xl text-ink">
                 When the desk says 70%, does it happen 70% of the time?
               </h3>
             </div>
             <div className="overflow-x-auto">
-              <table className="mt-2 w-full min-w-[34rem] text-sm">
+              <table className="data-table mt-2 min-w-[34rem]">
                 <thead>
-                  <tr className="text-left text-[11px] uppercase tracking-[0.16em] text-ink/46">
-                    <th className="py-2 pr-4 font-semibold">Forecast bucket</th>
-                    <th className="py-2 pr-4 font-semibold">Runs</th>
-                    <th className="py-2 pr-4 font-semibold">Avg forecast</th>
-                    <th className="py-2 pr-4 font-semibold">Actually resolved YES</th>
+                  <tr>
+                    <th>Forecast bucket</th>
+                    <th>Runs</th>
+                    <th>Avg forecast</th>
+                    <th>Actually resolved YES</th>
                   </tr>
                 </thead>
                 <tbody>
                   {scoreboard?.buckets.map((bucket) => (
-                    <tr key={bucket.label} className="border-t border-black/6">
-                      <td className="py-2.5 pr-4 font-semibold text-ink">{bucket.label}</td>
-                      <td className="py-2.5 pr-4 text-ink/68">{bucket.count}</td>
-                      <td className="py-2.5 pr-4 text-ink/68">{formatProbability(bucket.avg_p_hat)}</td>
-                      <td className="py-2.5 pr-4 text-ink/68">
+                    <tr key={bucket.label}>
+                      <td className="font-semibold text-ink">{bucket.label}</td>
+                      <td className="text-ink/70">{bucket.count}</td>
+                      <td className="text-ink/70">{formatProbability(bucket.avg_p_hat)}</td>
+                      <td className="text-ink/70">
                         {formatPercent(bucket.actual_yes_rate)}
                       </td>
                     </tr>
@@ -257,13 +262,13 @@ export function ScoreboardClient() {
 
           <section className="grid gap-3 lg:grid-cols-2">
             <Panel className="p-5">
-              <div className="border-b border-black/8 pb-3">
+              <div className="border-b border-black/10 pb-3">
                 <p className="section-label">By template</p>
               </div>
               <SliceTable slices={scoreboard?.template_slices ?? []} />
             </Panel>
             <Panel className="p-5">
-              <div className="border-b border-black/8 pb-3">
+              <div className="border-b border-black/10 pb-3">
                 <p className="section-label">By confidence</p>
               </div>
               <SliceTable slices={scoreboard?.confidence_slices ?? []} />
@@ -271,48 +276,48 @@ export function ScoreboardClient() {
           </section>
 
           <Panel className="p-5">
-            <div className="border-b border-black/8 pb-3">
+            <div className="border-b border-black/10 pb-3">
               <p className="section-label">Resolved runs</p>
               <h3 className="mt-1.5 font-serif text-2xl text-ink">Every scored call</h3>
             </div>
             <div className="overflow-x-auto">
-              <table className="mt-2 w-full min-w-[56rem] text-sm">
+              <table className="data-table mt-2 min-w-[56rem]">
                 <thead>
-                  <tr className="text-left text-[11px] uppercase tracking-[0.16em] text-ink/46">
-                    <th className="py-2 pr-4 font-semibold">Market</th>
-                    <th className="py-2 pr-4 font-semibold">Model</th>
-                    <th className="py-2 pr-4 font-semibold">Market price</th>
-                    <th className="py-2 pr-4 font-semibold">Outcome</th>
-                    <th className="py-2 pr-4 font-semibold">Hit</th>
-                    <th className="py-2 pr-4 font-semibold">Brier</th>
-                    <th className="py-2 pr-4 font-semibold">Trade</th>
-                    <th className="py-2 pr-4 font-semibold">P&amp;L</th>
+                  <tr>
+                    <th>Market</th>
+                    <th>Model</th>
+                    <th>Market price</th>
+                    <th>Outcome</th>
+                    <th>Hit</th>
+                    <th>Brier</th>
+                    <th>Trade</th>
+                    <th>P&amp;L</th>
                   </tr>
                 </thead>
                 <tbody>
                   {scoreboard?.resolved.map((row) => (
-                    <tr key={row.analysis_run_id} className="border-t border-black/6">
-                      <td className="max-w-[22rem] py-2.5 pr-4">
+                    <tr key={row.analysis_run_id}>
+                      <td className="max-w-[22rem]">
                         <Link
                           href={`/analyses/${row.analysis_request_id}`}
                           className="font-semibold text-ink underline-offset-2 hover:underline"
                         >
                           {row.title}
                         </Link>
-                        <p className="mt-0.5 text-xs text-ink/52">
+                        <p className="mt-0.5 text-xs text-ink/50">
                           {formatLabel(row.template)} · {formatLabel(row.recommendation_label)}
                         </p>
                       </td>
-                      <td className="py-2.5 pr-4 text-ink/68">{formatProbability(row.p_hat)}</td>
-                      <td className="py-2.5 pr-4 text-ink/68">
+                      <td className="text-ink/70">{formatProbability(row.p_hat)}</td>
+                      <td className="text-ink/70">
                         {formatProbability(row.market_mid_prob)}
                       </td>
-                      <td className="py-2.5 pr-4">
+                      <td>
                         <Badge variant={row.outcome === "yes" ? "yes" : "no"}>
                           {row.outcome.toUpperCase()}
                         </Badge>
                       </td>
-                      <td className="py-2.5 pr-4">
+                      <td>
                         {row.direction_hit === null || row.direction_hit === undefined ? (
                           <span className="text-ink/45">—</span>
                         ) : row.direction_hit ? (
@@ -321,13 +326,13 @@ export function ScoreboardClient() {
                           <Badge variant="no">Miss</Badge>
                         )}
                       </td>
-                      <td className="py-2.5 pr-4 text-ink/68">{formatBrier(row.model_brier)}</td>
-                      <td className="py-2.5 pr-4 text-ink/68">
+                      <td className="text-ink/70">{formatBrier(row.model_brier)}</td>
+                      <td className="text-ink/70">
                         {row.trade_side
                           ? `${row.trade_side.toUpperCase()} @ ${formatProbability(row.trade_entry_price)}`
                           : "—"}
                       </td>
-                      <td className={cn("py-2.5 pr-4 font-semibold", pnlTone(row.trade_pnl))}>
+                      <td className={cn("font-semibold tabular-nums", pnlTone(row.trade_pnl))}>
                         {formatPnl(row.trade_pnl)}
                       </td>
                     </tr>
@@ -341,13 +346,13 @@ export function ScoreboardClient() {
 
       {hasLoaded && (scoreboard?.pending.length ?? 0) > 0 ? (
         <Panel className="p-5">
-          <div className="border-b border-black/8 pb-3">
+          <div className="border-b border-black/10 pb-3">
             <p className="section-label">Awaiting resolution</p>
             <h3 className="mt-1.5 font-serif text-2xl text-ink">
               Open calls that will be scored later
             </h3>
           </div>
-          <div className="divide-y divide-black/6">
+          <div className="divide-y divide-black/5">
             {scoreboard?.pending.map((row) => (
               <Link
                 key={row.analysis_run_id}
@@ -356,14 +361,14 @@ export function ScoreboardClient() {
               >
                 <div className="min-w-0">
                   <p className="font-semibold text-ink">{row.title}</p>
-                  <p className="mt-0.5 text-xs text-ink/52">
+                  <p className="mt-0.5 text-xs text-ink/50">
                     {formatLabel(row.recommendation_label)}
                     {row.market_expiry_at
                       ? ` · closes ${new Date(row.market_expiry_at).toLocaleDateString()}`
                       : ""}
                   </p>
                 </div>
-                <p className="text-sm font-semibold text-ink/68">
+                <p className="text-sm font-semibold text-ink/70">
                   model {formatProbability(row.p_hat)}
                 </p>
               </Link>
@@ -388,30 +393,30 @@ function SliceTable({
   }>;
 }) {
   if (!slices.length) {
-    return <p className="py-4 text-sm leading-7 text-ink/58">No resolved runs in this view yet.</p>;
+    return <p className="py-4 text-sm leading-7 text-ink/60">No resolved runs in this view yet.</p>;
   }
   return (
     <div className="overflow-x-auto">
-      <table className="mt-2 w-full min-w-[24rem] text-sm">
+      <table className="data-table mt-2 min-w-[24rem]">
         <thead>
-          <tr className="text-left text-[11px] uppercase tracking-[0.16em] text-ink/46">
-            <th className="py-2 pr-4 font-semibold">Slice</th>
-            <th className="py-2 pr-4 font-semibold">Runs</th>
-            <th className="py-2 pr-4 font-semibold">Brier</th>
-            <th className="py-2 pr-4 font-semibold">Hit rate</th>
-            <th className="py-2 pr-4 font-semibold">P&amp;L</th>
+          <tr>
+            <th>Slice</th>
+            <th>Runs</th>
+            <th>Brier</th>
+            <th>Hit rate</th>
+            <th>P&amp;L</th>
           </tr>
         </thead>
         <tbody>
           {slices.map((slice) => (
-            <tr key={slice.key} className="border-t border-black/6">
-              <td className="py-2.5 pr-4 font-semibold capitalize text-ink">
+            <tr key={slice.key}>
+              <td className="font-semibold capitalize text-ink">
                 {formatLabel(slice.key)}
               </td>
-              <td className="py-2.5 pr-4 text-ink/68">{slice.resolved_runs}</td>
-              <td className="py-2.5 pr-4 text-ink/68">{formatBrier(slice.avg_model_brier)}</td>
-              <td className="py-2.5 pr-4 text-ink/68">{formatPercent(slice.direction_hit_rate)}</td>
-              <td className={cn("py-2.5 pr-4 font-semibold", pnlTone(slice.total_pnl))}>
+              <td className="text-ink/70">{slice.resolved_runs}</td>
+              <td className="text-ink/70">{formatBrier(slice.avg_model_brier)}</td>
+              <td className="text-ink/70">{formatPercent(slice.direction_hit_rate)}</td>
+              <td className={cn("font-semibold tabular-nums", pnlTone(slice.total_pnl))}>
                 {formatPnl(slice.total_pnl)}
               </td>
             </tr>

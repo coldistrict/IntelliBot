@@ -88,13 +88,13 @@ export function MarketDetailClient({ polymarketId }: MarketDetailClientProps) {
   if (isLoading) {
     return (
       <Panel className="space-y-4 p-5 animate-pulse">
-        <div className="h-4 w-32 rounded-full bg-black/8" />
-        <div className="h-10 max-w-3xl rounded-lg bg-black/8" />
+        <div className="h-4 w-32 rounded-full bg-black/10" />
+        <div className="h-10 max-w-3xl rounded-lg bg-black/10" />
         <div className="grid gap-3 md:grid-cols-4">
-          <div className="h-24 rounded-lg bg-black/8" />
-          <div className="h-24 rounded-lg bg-black/8" />
-          <div className="h-24 rounded-lg bg-black/8" />
-          <div className="h-24 rounded-lg bg-black/8" />
+          <div className="h-24 rounded-lg bg-black/10" />
+          <div className="h-24 rounded-lg bg-black/10" />
+          <div className="h-24 rounded-lg bg-black/10" />
+          <div className="h-24 rounded-lg bg-black/10" />
         </div>
       </Panel>
     );
@@ -166,21 +166,33 @@ export function MarketDetailClient({ polymarketId }: MarketDetailClientProps) {
       ) : null}
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <Panel className="p-4">
-          <p className="section-label">YES price</p>
-          <p className="mt-2 text-2xl font-semibold text-ink">{formatPercent(yesMidpoint)}</p>
+        <Panel className="border-pine/20 bg-pine/5 p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-pine/80">
+            Yes price
+          </p>
+          <p className="mt-2 text-2xl font-semibold tabular-nums text-pine">
+            {formatPercent(yesMidpoint)}
+          </p>
         </Panel>
-        <Panel className="p-4">
-          <p className="section-label">NO price</p>
-          <p className="mt-2 text-2xl font-semibold text-ink">{formatPercent(noMidpoint)}</p>
+        <Panel className="border-ember/20 bg-ember/5 p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ember/80">
+            No price
+          </p>
+          <p className="mt-2 text-2xl font-semibold tabular-nums text-ember">
+            {formatPercent(noMidpoint)}
+          </p>
         </Panel>
         <Panel className="p-4">
           <p className="section-label">Liquidity</p>
-          <p className="mt-2 text-2xl font-semibold text-ink">{formatCurrency(market.liquidity)}</p>
+          <p className="mt-2 text-2xl font-semibold tabular-nums text-ink">
+            {formatCurrency(market.liquidity)}
+          </p>
         </Panel>
         <Panel className="p-4">
           <p className="section-label">24h volume</p>
-          <p className="mt-2 text-2xl font-semibold text-ink">{formatCurrency(market.volume_24h)}</p>
+          <p className="mt-2 text-2xl font-semibold tabular-nums text-ink">
+            {formatCurrency(market.volume_24h)}
+          </p>
         </Panel>
         <Panel className="p-4">
           <p className="section-label">Ends</p>
@@ -190,21 +202,21 @@ export function MarketDetailClient({ polymarketId }: MarketDetailClientProps) {
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <Panel className="space-y-4 p-5">
-          <div className="border-b border-black/8 pb-3">
+          <div className="border-b border-black/10 pb-3">
             <p className="section-label">Resolution</p>
             <h3 className="mt-1.5 font-serif text-2xl text-ink">Rules</h3>
           </div>
-          <p className="whitespace-pre-wrap text-sm leading-7 text-ink/68">
+          <p className="whitespace-pre-wrap text-sm leading-7 text-ink/70">
             {resolutionText}
           </p>
         </Panel>
 
         <Panel className="space-y-4 p-5">
-          <div className="border-b border-black/8 pb-3">
+          <div className="border-b border-black/10 pb-3">
             <p className="section-label">Market</p>
             <h3 className="mt-1.5 font-serif text-2xl text-ink">Context</h3>
           </div>
-          <div className="space-y-3 text-sm leading-7 text-ink/64">
+          <div className="space-y-3 text-sm leading-7 text-ink/65">
             <p>{contextText}</p>
             <p>
               <span className="font-semibold text-ink">Spread:</span>{" "}

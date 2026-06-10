@@ -18,11 +18,11 @@ export default function SettingsPage() {
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <ProviderStatusPanel />
         <Panel className="p-5">
-          <div className="border-b border-black/8 pb-3">
+          <div className="border-b border-black/10 pb-3">
             <p className="section-label">Optional setup</p>
             <h3 className="mt-1.5 font-serif text-2xl text-ink">Premium and macro extras</h3>
           </div>
-          <div className="mt-4 space-y-4 text-sm leading-7 text-ink/64">
+          <div className="mt-4 space-y-4 text-sm leading-7 text-ink/65">
             <p>
               Premium retrieval stays off by default. The desk should still work cleanly without a
               saved browser session.

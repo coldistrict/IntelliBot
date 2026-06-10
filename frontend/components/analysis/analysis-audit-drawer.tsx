@@ -129,23 +129,23 @@ export function AnalysisAuditDrawer({
         type="button"
         aria-label="Close calculation audit"
         onClick={onClose}
-        className="absolute inset-0 bg-black/28 backdrop-blur-[1px]"
+        className="absolute inset-0 bg-black/30 backdrop-blur-[1px]"
       />
       <aside
         role="dialog"
         aria-modal="true"
         aria-label="How this was calculated"
-        className="absolute inset-x-0 bottom-0 top-12 overflow-y-auto border border-black/8 bg-[rgba(248,250,247,0.98)] px-5 pb-10 pt-5 shadow-[0_-12px_40px_rgba(21,29,26,0.12)] md:inset-y-0 md:left-auto md:right-0 md:top-0 md:w-[min(48rem,100vw)] md:border-l"
+        className="absolute inset-x-0 bottom-0 top-12 overflow-y-auto border border-black/10 bg-[rgba(248,250,247,0.98)] px-5 pb-10 pt-5 shadow-[0_-12px_40px_rgba(21,29,26,0.12)] md:inset-y-0 md:left-auto md:right-0 md:top-0 md:w-[min(48rem,100vw)] md:border-l"
       >
         <div className="mx-auto max-w-4xl space-y-8">
-          <div className="border-b border-black/8 pb-5">
+          <div className="border-b border-black/10 pb-5">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-2">
                 <p className="eyebrow">
                   Layered audit
                 </p>
                 <h2 className="font-serif text-3xl text-ink">How this was calculated</h2>
-                <p className="max-w-2xl text-sm leading-7 text-ink/66">
+                <p className="max-w-2xl text-sm leading-7 text-ink/65">
                   This inspector shows structured scoring, uncertainty, recommendation, and source
                   grounding details. It does not expose hidden model chain-of-thought.
                 </p>
@@ -175,30 +175,30 @@ export function AnalysisAuditDrawer({
           {audit ? (
             <>
               <section id="audit-section-scoring" className="space-y-4">
-                <div className="border-b border-black/8 pb-3">
+                <div className="border-b border-black/10 pb-3">
                   <p className="section-label">Scoring</p>
                   <h3 className="mt-2 font-serif text-2xl text-ink">Rule interpretation and probability inputs</h3>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <article className="rounded-lg border border-black/8 bg-white/75 p-4">
+                  <article className="rounded-lg border border-black/10 bg-white/75 p-4">
                     <p className="section-label">Template</p>
                     <p className="mt-2 text-lg font-semibold text-ink">{humanize(audit.rule_interpretation.template)}</p>
-                    <p className="mt-3 text-sm leading-7 text-ink/62">
+                    <p className="mt-3 text-sm leading-7 text-ink/60">
                       {audit.rule_interpretation.resolution_definition ?? "No rule definition stored."}
                     </p>
                   </article>
-                  <article className="rounded-lg border border-black/8 bg-white/75 p-4">
+                  <article className="rounded-lg border border-black/10 bg-white/75 p-4">
                     <p className="section-label">YES / NO conditions</p>
-                    <p className="mt-2 text-sm leading-7 text-ink/66">
+                    <p className="mt-2 text-sm leading-7 text-ink/65">
                       <span className="font-semibold text-ink">YES:</span> {audit.rule_interpretation.yes_condition}
                     </p>
-                    <p className="mt-2 text-sm leading-7 text-ink/66">
+                    <p className="mt-2 text-sm leading-7 text-ink/65">
                       <span className="font-semibold text-ink">NO:</span> {audit.rule_interpretation.no_condition}
                     </p>
                   </article>
-                  <article className="rounded-lg border border-black/8 bg-white/75 p-4">
+                  <article className="rounded-lg border border-black/10 bg-white/75 p-4">
                     <p className="section-label">Evidence mix</p>
-                    <div className="mt-3 space-y-2 text-sm text-ink/64">
+                    <div className="mt-3 space-y-2 text-sm text-ink/65">
                       <p>Prior: {formatPercent(audit.probability?.prior_probability)}</p>
                       <p>Non-social evidence: {audit.probability ? formatSigned(audit.probability.non_social_evidence) : "Unavailable"}</p>
                       <p>Capped social evidence: {audit.probability ? formatSigned(audit.probability.capped_social_evidence) : "Unavailable"}</p>
@@ -208,14 +208,14 @@ export function AnalysisAuditDrawer({
                       <p>Model NO complement: {formatPercent(complementProbability(audit.probability?.p_hat))}</p>
                     </div>
                     {audit.social_modifier?.crowd_signal_reason ? (
-                      <p className="mt-3 text-sm leading-7 text-ink/58">
+                      <p className="mt-3 text-sm leading-7 text-ink/60">
                         {audit.social_modifier.crowd_signal_reason}
                       </p>
                     ) : null}
                   </article>
-                  <article className="rounded-lg border border-black/8 bg-white/75 p-4">
+                  <article className="rounded-lg border border-black/10 bg-white/75 p-4">
                     <p className="section-label">Source lanes</p>
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-ink/64">
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-ink/65">
                       <p>Official: {audit.source_lanes.official}</p>
                       <p>News: {audit.source_lanes.news}</p>
                       <p>Premium: {audit.source_lanes.premium}</p>
@@ -228,11 +228,11 @@ export function AnalysisAuditDrawer({
               </section>
 
               <section id="audit-section-uncertainty" className="space-y-4">
-                <div className="border-b border-black/8 pb-3">
+                <div className="border-b border-black/10 pb-3">
                   <p className="section-label">Uncertainty</p>
                   <h3 className="mt-2 font-serif text-2xl text-ink">Why the range widened or stayed tight</h3>
                 </div>
-                <div className="rounded-lg border border-black/8 bg-white/75 p-4">
+                <div className="rounded-lg border border-black/10 bg-white/75 p-4">
                   <div className="grid gap-4 md:grid-cols-3">
                     <div>
                       <p className="section-label">Base</p>
@@ -256,27 +256,27 @@ export function AnalysisAuditDrawer({
                   <div className="mt-5 space-y-3">
                     {(audit.uncertainty?.adjustments ?? []).length ? (
                       (audit.uncertainty?.adjustments ?? []).map((adjustment) => (
-                        <article key={adjustment.key} className="border-b border-black/6 pb-3 last:border-b-0 last:pb-0">
+                        <article key={adjustment.key} className="border-b border-black/5 pb-3 last:border-b-0 last:pb-0">
                           <div className="flex items-center justify-between gap-3">
                             <p className="text-sm font-semibold text-ink">{adjustment.label}</p>
                             <p className="text-sm font-semibold text-ink">{formatSigned(adjustment.amount)}</p>
                           </div>
-                          <p className="mt-2 text-sm leading-7 text-ink/62">{adjustment.note}</p>
+                          <p className="mt-2 text-sm leading-7 text-ink/60">{adjustment.note}</p>
                         </article>
                       ))
                     ) : (
-                      <p className="text-sm leading-7 text-ink/58">No explicit uncertainty adjustments were stored.</p>
+                      <p className="text-sm leading-7 text-ink/60">No explicit uncertainty adjustments were stored.</p>
                     )}
                   </div>
                 </div>
               </section>
 
               <section id="audit-section-recommendation" className="space-y-4">
-                <div className="border-b border-black/8 pb-3">
+                <div className="border-b border-black/10 pb-3">
                   <p className="section-label">Recommendation</p>
                   <h3 className="mt-2 font-serif text-2xl text-ink">Executable prices and final label</h3>
                 </div>
-                <div className="rounded-lg border border-black/8 bg-white/75 p-4">
+                <div className="rounded-lg border border-black/10 bg-white/75 p-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
                       <p className="section-label">Chosen label</p>
@@ -288,25 +288,25 @@ export function AnalysisAuditDrawer({
                     </div>
                     <div>
                       <p className="section-label">YES / NO executable prices</p>
-                      <p className="mt-2 text-sm leading-7 text-ink/62">
+                      <p className="mt-2 text-sm leading-7 text-ink/60">
                         YES {audit.recommendation_math?.yes_exec_price ?? "n/a"} · NO {audit.recommendation_math?.no_exec_price ?? "n/a"}
                       </p>
                     </div>
                     <div>
                       <p className="section-label">Friction buffer</p>
-                      <p className="mt-2 text-sm leading-7 text-ink/62">
+                      <p className="mt-2 text-sm leading-7 text-ink/60">
                         {audit.recommendation_math?.friction_buffer ?? "Unavailable"}
                       </p>
                     </div>
                   </div>
-                  <p className="mt-4 text-sm leading-7 text-ink/62">
+                  <p className="mt-4 text-sm leading-7 text-ink/60">
                     {audit.recommendation_math?.note ?? audit.confidence?.reason ?? "No recommendation note stored."}
                   </p>
                 </div>
               </section>
 
               <section id="audit-section-grounding" className="space-y-4">
-                <div className="border-b border-black/8 pb-3">
+                <div className="border-b border-black/10 pb-3">
                   <p className="section-label">Source grounding</p>
                   <h3 className="mt-2 font-serif text-2xl text-ink">Ranked passages behind the memo</h3>
                 </div>
@@ -320,7 +320,7 @@ export function AnalysisAuditDrawer({
                           right.relevance_score - left.relevance_score || left.passage_index - right.passage_index,
                       );
                       return (
-                        <article key={source.id} className="rounded-lg border border-black/8 bg-white/75 p-4">
+                        <article key={source.id} className="rounded-lg border border-black/10 bg-white/75 p-4">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm font-semibold text-ink">{source.title ?? source.domain ?? "Source"}</p>
                             <Badge variant="muted">{source.source_tier}</Badge>
@@ -335,21 +335,21 @@ export function AnalysisAuditDrawer({
                                   className={`rounded-lg border px-4 py-3 ${
                                     focus?.passageId === passage.id
                                       ? "border-pine/30 bg-pine/10"
-                                      : "border-black/6 bg-white/70"
+                                      : "border-black/5 bg-white/70"
                                   }`}
                                 >
                                   <div className="flex flex-wrap items-center gap-2">
                                     <Badge variant="muted">passage {passage.passage_index}</Badge>
-                                    <span className="text-[10px] uppercase tracking-[0.16em] text-ink/42">
+                                    <span className="text-[10px] uppercase tracking-[0.16em] text-ink/40">
                                       relevance {passage.relevance_score.toFixed(2)}
                                     </span>
                                   </div>
-                                  <p className="mt-3 text-sm leading-7 text-ink/66">{passage.text}</p>
+                                  <p className="mt-3 text-sm leading-7 text-ink/65">{passage.text}</p>
                                 </article>
                               ))}
                             </div>
                           ) : (
-                            <p className="mt-3 text-sm leading-7 text-ink/58">
+                            <p className="mt-3 text-sm leading-7 text-ink/60">
                               No grounded passages were persisted for this source.
                             </p>
                           )}
@@ -360,7 +360,7 @@ export function AnalysisAuditDrawer({
               </section>
 
               <section id="audit-section-factors" className="space-y-4">
-                <div className="border-b border-black/8 pb-3">
+                <div className="border-b border-black/10 pb-3">
                   <p className="section-label">Factor details</p>
                   <h3 className="mt-2 font-serif text-2xl text-ink">Every contribution that touched the score</h3>
                 </div>
@@ -372,7 +372,7 @@ export function AnalysisAuditDrawer({
                       className={`rounded-lg border p-4 ${
                         focus?.factorId === factor.factor_id
                           ? "border-pine/30 bg-pine/10"
-                          : "border-black/8 bg-white/75"
+                          : "border-black/10 bg-white/75"
                       }`}
                     >
                       <div className="flex flex-wrap items-center gap-2">
@@ -396,7 +396,7 @@ export function AnalysisAuditDrawer({
                       <p className="mt-3 text-sm font-semibold text-ink">
                         {factor.rationale ?? "No factor rationale stored."}
                       </p>
-                      <div className="mt-3 grid gap-2 text-sm text-ink/62 md:grid-cols-2">
+                      <div className="mt-3 grid gap-2 text-sm text-ink/60 md:grid-cols-2">
                         <p>Source: {factor.source_title ?? "Unavailable"}</p>
                         <p>Signed contribution: {formatSigned(factor.signed_contribution)}</p>
                         <p>Strength: {humanize(factor.strength)}</p>
@@ -405,7 +405,7 @@ export function AnalysisAuditDrawer({
                         <p>Weight: {factor.final_weight.toFixed(4)}</p>
                       </div>
                       {factor.exclusion_reason ? (
-                        <p className="mt-3 text-sm leading-7 text-ink/58">
+                        <p className="mt-3 text-sm leading-7 text-ink/60">
                           Exclusion reason: {factor.exclusion_reason}
                         </p>
                       ) : null}
@@ -415,7 +415,7 @@ export function AnalysisAuditDrawer({
               </section>
             </>
           ) : (
-            <p className="text-sm leading-7 text-ink/58">
+            <p className="text-sm leading-7 text-ink/60">
               The inspector will unlock once the analysis has produced a run.
             </p>
           )}
