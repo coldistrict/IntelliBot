@@ -56,3 +56,4 @@ class PublicMarketResponse(BaseModel):
 class PublicMarketListResponse(BaseModel):
     items: list[PublicMarketResponse]
     total: int
+    has_more: bool = False

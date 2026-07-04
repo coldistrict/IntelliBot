@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { AnalysisSummary, fetchAnalyses } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { DataState } from "@/components/ui/data-state";
 import { Panel } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +35,7 @@ function isActiveStatus(status: string) {
 function itemSearchText(item: AnalysisSummary) {
   return [
     item.input_text,
+    item.market_title,
     item.display_summary,
     item.current_stage_note,
     item.current_stage_label,
@@ -70,7 +72,9 @@ function AnalysisRow({ item }: { item: AnalysisSummary }) {
             <Badge variant="muted">{item.latest_confidence_label.replaceAll("_", " ")}</Badge>
           ) : null}
         </div>
-        <h3 className="mt-2 break-words text-base font-semibold leading-6 text-ink">{item.input_text}</h3>
+        <h3 className="mt-2 break-words text-base font-semibold leading-6 text-ink">
+          {item.market_title ?? item.input_text}
+        </h3>
         <p className="mt-1 max-w-4xl break-words text-sm leading-6 text-ink/60">
           {item.display_summary ??
             item.current_stage_note ??
@@ -110,25 +114,27 @@ export function HistoryList() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [templateFilter, setTemplateFilter] = useState("all");
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const payload = await fetchAnalyses();
-        setItems(payload.items);
-        setError(null);
-      } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : "Unable to load analyses.");
-      } finally {
-        setHasLoaded(true);
-      }
+  const load = useCallback(async () => {
+    try {
+      const payload = await fetchAnalyses();
+      setItems(payload.items);
+      setError(null);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Unable to load analyses.");
+    } finally {
+      setHasLoaded(true);
     }
+  }, []);
 
+  useEffect(() => {
     void load();
     const interval = window.setInterval(() => {
-      void load();
+      if (document.visibilityState === "visible") {
+        void load();
+      }
     }, 5000);
     return () => window.clearInterval(interval);
-  }, []);
+  }, [load]);
 
   const templateOptions = useMemo(
     () =>
@@ -179,12 +185,24 @@ export function HistoryList() {
     setTemplateFilter("all");
   }
 
-  if (error) {
+  if (error && items.length === 0) {
     return (
-      <Panel className="p-7">
-        <p className="eyebrow">History</p>
-        <p className="mt-4 text-sm text-ember">{error}</p>
-      </Panel>
+      <div className="space-y-6">
+        <section className="max-w-5xl space-y-4">
+          <p className="eyebrow">Research Log</p>
+          <h1 className="page-title">
+            Track what is still moving and what already resolved into a memo.
+          </h1>
+        </section>
+        <Panel className="p-7">
+          <DataState
+            variant="error"
+            title="The research log cannot be loaded"
+            note={error}
+            onRetry={() => void load()}
+          />
+        </Panel>
+      </div>
     );
   }
 
@@ -200,6 +218,15 @@ export function HistoryList() {
           denser reading log you can reopen at any time.
         </p>
       </section>
+
+      {error ? (
+        <DataState
+          variant="error"
+          title="Refresh failed"
+          note={`Showing the last loaded runs. ${error}`}
+          onRetry={() => void load()}
+        />
+      ) : null}
 
       <Panel className="p-5">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">

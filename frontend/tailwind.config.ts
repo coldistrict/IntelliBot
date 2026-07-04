@@ -14,6 +14,11 @@ const config: Config = {
         ember: "#ad4b34",
         pine: "#146052",
         mist: "#dfe7e1",
+        amber: {
+          DEFAULT: "#b9892e",
+          soft: "#f0d18a",
+          deep: "#6a4c0a",
+        },
       },
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],

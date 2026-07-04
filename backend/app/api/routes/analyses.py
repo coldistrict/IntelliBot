@@ -117,6 +117,7 @@ def _build_summary(request: AnalysisRequest) -> AnalysisRequestSummary:
 
     return AnalysisRequestSummary.model_validate(request).model_copy(
         update={
+            "market_title": request.market.title if request.market else None,
             "latest_recommendation_label": (
                 active_run.recommendation_label if active_run else None
             ),
@@ -250,19 +251,28 @@ def trigger_auto_scan(
 def list_analyses(
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    polymarket_id: str | None = Query(default=None, max_length=255),
     session: Session = Depends(get_db_session),
 ) -> AnalysisListResponse:
-    total = session.scalar(select(func.count()).select_from(AnalysisRequest)) or 0
-    items = session.scalars(
+    count_query = select(func.count()).select_from(AnalysisRequest)
+    items_query = (
         select(AnalysisRequest)
         .options(
             selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.reviews),
             selectinload(AnalysisRequest.market),
         )
         .order_by(AnalysisRequest.created_at.desc(), AnalysisRequest.id.desc())
-        .limit(limit)
-        .offset(offset)
-    ).all()
+    )
+    if polymarket_id is not None:
+        market_filter = (
+            AnalysisRequest.market_id == Market.id,
+            Market.polymarket_id == polymarket_id,
+        )
+        count_query = count_query.join(Market, market_filter[0]).where(market_filter[1])
+        items_query = items_query.join(Market, market_filter[0]).where(market_filter[1])
+
+    total = session.scalar(count_query) or 0
+    items = session.scalars(items_query.limit(limit).offset(offset)).all()
     return AnalysisListResponse(items=[_build_summary(item) for item in items], total=total)
 
 

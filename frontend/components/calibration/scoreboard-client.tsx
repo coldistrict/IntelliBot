@@ -10,8 +10,14 @@ import {
   refreshCalibrationOutcomes,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { DataState } from "@/components/ui/data-state";
 import { Panel } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
+
+// Below this many head-to-head runs, a Brier comparison is noise, not signal.
+const HEAD_TO_HEAD_MIN_RUNS = 5;
+// Brier deltas smaller than this are treated as a tie.
+const BRIER_DELTA_DEAD_BAND = 0.01;
 
 function formatPercent(value: number | null | undefined) {
   if (value === null || value === undefined) {
@@ -117,13 +123,20 @@ export function ScoreboardClient() {
     return (
       <Panel className="p-7">
         <p className="eyebrow">Scoreboard</p>
-        <p className="mt-4 text-sm text-ember">{error}</p>
+        <DataState
+          variant="error"
+          title="The scoreboard cannot be loaded"
+          note={error}
+          onRetry={() => void load()}
+          className="mt-4"
+        />
       </Panel>
     );
   }
 
   const summary = scoreboard?.summary;
   const hasResolved = (summary?.resolved_runs ?? 0) > 0;
+  const headToHeadRuns = summary?.head_to_head_runs ?? 0;
   const headToHeadDelta =
     summary &&
     summary.head_to_head_model_brier !== null &&
@@ -132,6 +145,17 @@ export function ScoreboardClient() {
     summary.head_to_head_market_brier !== undefined
       ? summary.head_to_head_market_brier - summary.head_to_head_model_brier
       : null;
+  const headToHeadNote =
+    headToHeadDelta === null
+      ? "Needs resolved runs with a market prior"
+      : headToHeadRuns < HEAD_TO_HEAD_MIN_RUNS
+        ? `Too few runs to judge — ${headToHeadRuns} of ${HEAD_TO_HEAD_MIN_RUNS} head-to-head runs needed`
+        : Math.abs(headToHeadDelta) < BRIER_DELTA_DEAD_BAND
+          ? `Dead even with the market across ${headToHeadRuns} runs`
+          : headToHeadDelta > 0
+            ? `Model is beating the market price across ${headToHeadRuns} runs`
+            : `Market price is still more accurate across ${headToHeadRuns} runs`;
+  const unlinkedRuns = summary?.unlinked_runs ?? 0;
 
   return (
     <div className="space-y-6">
@@ -159,7 +183,7 @@ export function ScoreboardClient() {
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Panel className="p-4">
           <p className="section-label">Resolved runs</p>
-          <p className="stat-number mt-2">{summary?.resolved_runs ?? 0}</p>
+          <p className="stat-number mt-2">{!hasLoaded ? "—" : summary?.resolved_runs ?? 0}</p>
           <p className="mt-1 text-sm text-ink/60">
             {summary?.pending_runs ?? 0} awaiting resolution · {summary?.unlinked_runs ?? 0} without
             a linked market
@@ -174,15 +198,7 @@ export function ScoreboardClient() {
               vs {formatBrier(summary?.head_to_head_market_brier)}
             </span>
           </p>
-          <p className="mt-1 text-sm text-ink/60">
-            {headToHeadDelta === null
-              ? "Needs resolved runs with a market prior"
-              : headToHeadDelta > 0
-                ? "Model is beating the market price"
-                : headToHeadDelta < 0
-                  ? "Market price is still more accurate"
-                  : "Dead even with the market"}
-          </p>
+          <p className="mt-1 text-sm text-ink/60">{headToHeadNote}</p>
         </Panel>
         <Panel className="p-4">
           <p className="section-label">Direction hit rate</p>
@@ -201,7 +217,7 @@ export function ScoreboardClient() {
               pnlTone(summary?.total_pnl),
             )}
           >
-            {formatPnl(summary?.total_pnl ?? 0)}
+            {!hasLoaded ? "—" : formatPnl(summary?.total_pnl ?? 0)}
           </p>
           <p className="mt-1 text-sm text-ink/60">
             {summary?.trade_count ?? 0} virtual trade(s) · {summary?.trade_wins ?? 0} won ·{" "}
@@ -212,9 +228,24 @@ export function ScoreboardClient() {
         </Panel>
       </section>
 
+      {hasLoaded && unlinkedRuns > 0 ? (
+        <Panel className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="max-w-3xl text-sm leading-6 text-ink/60">
+            <span className="font-semibold text-ink">
+              {unlinkedRuns} run{unlinkedRuns === 1 ? "" : "s"} can never be scored
+            </span>{" "}
+            — custom claims have no Polymarket resolution source. Analyze from the Market Browser
+            to link runs to a real market.
+          </p>
+          <Link href="/markets" className="secondary-action shrink-0">
+            Browse markets
+          </Link>
+        </Panel>
+      ) : null}
+
       {!hasLoaded ? (
         <Panel className="p-7">
-          <p className="text-sm leading-7 text-ink/60">Loading the scoreboard...</p>
+          <DataState variant="loading" note="Loading the scoreboard…" />
         </Panel>
       ) : !hasResolved ? (
         <Panel className="p-7">

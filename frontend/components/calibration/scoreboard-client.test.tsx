@@ -162,10 +162,87 @@ describe("ScoreboardClient", () => {
     });
 
     expect(screen.getByText("Every scored call")).toBeInTheDocument();
-    expect(screen.getByText("Model is beating the market price")).toBeInTheDocument();
+    expect(
+      screen.getByText("Too few runs to judge — 2 of 5 head-to-head runs needed"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Model is beating the market price/)).not.toBeInTheDocument();
     expect(screen.getByText("YES @ 50%")).toBeInTheDocument();
     expect(screen.getByText("Pending market")).toBeInTheDocument();
     expect(screen.getByText("Won market").closest("a")).toHaveAttribute("href", "/analyses/11");
+  });
+
+  it("declares a verdict only with enough head-to-head runs and a real delta", async () => {
+    vi.mocked(fetchCalibrationScoreboard).mockResolvedValue({
+      ...populatedScoreboard,
+      summary: {
+        ...populatedScoreboard.summary,
+        head_to_head_runs: 6,
+        head_to_head_model_brier: 0.18,
+        head_to_head_market_brier: 0.24,
+      },
+    });
+
+    render(<ScoreboardClient />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Model is beating the market price across 6 runs"),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("uses dead-even copy inside the Brier delta dead band", async () => {
+    vi.mocked(fetchCalibrationScoreboard).mockResolvedValue({
+      ...populatedScoreboard,
+      summary: {
+        ...populatedScoreboard.summary,
+        head_to_head_runs: 6,
+        head_to_head_model_brier: 0.2,
+        head_to_head_market_brier: 0.205,
+      },
+    });
+
+    render(<ScoreboardClient />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Dead even with the market across 6 runs")).toBeInTheDocument();
+    });
+  });
+
+  it("explains unscoreable runs and routes toward linked markets", async () => {
+    vi.mocked(fetchCalibrationScoreboard).mockResolvedValue({
+      ...populatedScoreboard,
+      summary: { ...populatedScoreboard.summary, unlinked_runs: 37 },
+    });
+
+    render(<ScoreboardClient />);
+
+    await waitFor(() => {
+      expect(screen.getByText("37 runs can never be scored")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("link", { name: "Browse markets" })).toHaveAttribute(
+      "href",
+      "/markets",
+    );
+  });
+
+  it("shows a retryable error state instead of a dead end", async () => {
+    vi.mocked(fetchCalibrationScoreboard)
+      .mockRejectedValueOnce(new Error("Failed to fetch"))
+      .mockResolvedValueOnce(populatedScoreboard);
+
+    render(<ScoreboardClient />);
+
+    await waitFor(() => {
+      expect(screen.getByText("The scoreboard cannot be loaded")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Failed to fetch")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Won market")).toBeInTheDocument();
+    });
   });
 
   it("refreshes outcomes and reloads the scoreboard", async () => {

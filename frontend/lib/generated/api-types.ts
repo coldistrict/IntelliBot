@@ -388,6 +388,8 @@ export interface components {
             latest_recommendation_label?: components["schemas"]["RecommendationLabelEnum"] | null;
             /** Market Id */
             market_id: number | null;
+            /** Market Title */
+            market_title?: string | null;
             mode: components["schemas"]["ModeEnum"];
             /** Progress Percent */
             progress_percent?: number | null;
@@ -931,6 +933,11 @@ export interface components {
         };
         /** PublicMarketListResponse */
         PublicMarketListResponse: {
+            /**
+             * Has More
+             * @default false
+             */
+            has_more: boolean;
             /** Items */
             items: components["schemas"]["PublicMarketResponse"][];
             /** Total */
@@ -1409,6 +1416,7 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                polymarket_id?: string | null;
             };
             header?: never;
             path?: never;

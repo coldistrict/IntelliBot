@@ -109,8 +109,23 @@ export async function fetchProviderStatus(): Promise<ProviderStatus> {
   return fetchJson<ProviderStatus>("/api/providers/status");
 }
 
-export async function fetchAnalyses(): Promise<Schema<"AnalysisListResponse">> {
-  return fetchJson<Schema<"AnalysisListResponse">>("/api/analyses");
+export async function fetchAnalyses(params?: {
+  polymarket_id?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<Schema<"AnalysisListResponse">> {
+  const searchParams = new URLSearchParams();
+  if (params?.polymarket_id) {
+    searchParams.set("polymarket_id", params.polymarket_id);
+  }
+  if (params?.limit) {
+    searchParams.set("limit", String(params.limit));
+  }
+  if (params?.offset) {
+    searchParams.set("offset", String(params.offset));
+  }
+  const suffix = searchParams.toString() ? `?${searchParams.toString()}` : "";
+  return fetchJson<Schema<"AnalysisListResponse">>(`/api/analyses${suffix}`);
 }
 
 export async function fetchAnalysis(id: string | number): Promise<AnalysisDetail> {
