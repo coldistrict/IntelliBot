@@ -193,6 +193,29 @@ export function ManualAnalysisForm() {
             </label>
           </section>
 
+          <div className="mx-5 my-5 flex flex-col gap-3 rounded-lg border border-black/10 bg-white/95 px-4 py-4 shadow-panel backdrop-blur-sm md:mx-6 md:flex-row md:items-center md:justify-between">
+            <p className="text-sm leading-7 text-ink/60">
+              The composer is intentionally compact. Most of the product value should happen on
+              the live analysis page, not here.
+            </p>
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="primary-action md:min-w-44"
+            >
+              {isSubmitting ? "Starting analysis..." : "Run manual analysis"}
+            </button>
+          </div>
+
+          {error ? (
+            <div
+              role="alert"
+              className="mx-5 -mt-2 mb-5 rounded-lg border border-ember/20 bg-ember/10 px-5 py-4 text-sm leading-7 text-ember md:mx-6"
+            >
+              {error}
+            </div>
+          ) : null}
+
           <section className="space-y-4 p-5 md:p-6">
             <div className="flex flex-wrap items-center gap-3">
               <p className="section-label">
@@ -263,44 +286,32 @@ export function ManualAnalysisForm() {
             </div>
           </section>
 
-          {error ? (
-            <div className="mx-5 rounded-lg border border-ember/20 bg-ember/10 px-5 py-4 text-sm leading-7 text-ember md:mx-6">
-              {error}
-            </div>
-          ) : null}
-
-          <section className="memo-rule space-y-5 p-5 md:p-6">
-            <div className="grid gap-5 lg:grid-cols-2">
-              <div>
-                <p className="text-sm font-semibold text-ink">What happens next</p>
-                <p className="mt-2 text-sm leading-7 text-ink/60">
-                  You’ll land on a live memo page that keeps the structure visible while the run is
-                  still working. Rules, sources, factors, and the audit inspector unlock as soon as
-                  each artifact is ready.
-                </p>
+          <section className="memo-rule p-5 md:p-6">
+            <details className="group">
+              <summary className="cursor-pointer list-none text-sm font-semibold text-ink/70 transition hover:text-ink">
+                <span aria-hidden="true" className="mr-2 inline-block transition group-open:rotate-90">
+                  ›
+                </span>
+                What happens next & tips for stronger inputs
+              </summary>
+              <div className="mt-4 grid gap-5 lg:grid-cols-2">
+                <div>
+                  <p className="text-sm font-semibold text-ink">What happens next</p>
+                  <p className="mt-2 text-sm leading-7 text-ink/60">
+                    You’ll land on a live memo page that keeps the structure visible while the run
+                    is still working. Rules, sources, factors, and the audit inspector unlock as
+                    soon as each artifact is ready.
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-ink">Tips for stronger inputs</p>
+                  <p className="mt-2 text-sm leading-7 text-ink/60">
+                    Use a direct claim, add a deadline if it matters, and let Grok handle live X
+                    discovery instead of hand-curating posts.
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-semibold text-ink">Tips for stronger inputs</p>
-                <p className="mt-2 text-sm leading-7 text-ink/60">
-                  Use a direct claim, add a deadline if it matters, and let Grok handle live X
-                  discovery instead of hand-curating posts.
-                </p>
-              </div>
-            </div>
-
-            <div className="sticky bottom-4 flex flex-col gap-3 rounded-lg border border-black/10 bg-white/95 px-4 py-4 shadow-panel backdrop-blur-sm md:flex-row md:items-center md:justify-between">
-              <p className="text-sm leading-7 text-ink/60">
-                The composer is intentionally compact. Most of the product value should happen on
-                the live analysis page, not here.
-              </p>
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className="primary-action md:min-w-44"
-              >
-                {isSubmitting ? "Starting analysis..." : "Run manual analysis"}
-              </button>
-            </div>
+            </details>
           </section>
         </form>
       </Panel>

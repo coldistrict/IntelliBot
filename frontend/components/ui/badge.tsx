@@ -4,14 +4,14 @@ const variantStyles = {
   neutral: "border border-black/10 bg-black/5 text-ink/80",
   yes: "border border-pine/20 bg-pine/10 text-pine",
   no: "border border-ember/20 bg-ember/10 text-ember",
-  warning: "border border-[#b9892e]/25 bg-[#f0d18a]/25 text-[#6a4c0a]",
+  warning: "border border-amber/25 bg-amber-soft/25 text-amber-deep",
   muted: "border border-black/10 bg-white/70 text-ink/60",
 };
 
 const dotStyles: Partial<Record<keyof typeof variantStyles, string>> = {
   yes: "bg-pine",
   no: "bg-ember",
-  warning: "bg-[#b9892e]",
+  warning: "bg-amber",
 };
 
 type BadgeProps = {

@@ -4,7 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { createManualAnalysis, fetchPublicMarket, PublicMarket } from "@/lib/api";
+import {
+  AnalysisSummary,
+  createManualAnalysis,
+  fetchAnalyses,
+  fetchPublicMarket,
+  PublicMarket,
+} from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/ui/panel";
 import {
@@ -32,6 +38,7 @@ function statusVariant(status: string | null | undefined) {
 export function MarketDetailClient({ polymarketId }: MarketDetailClientProps) {
   const router = useRouter();
   const [market, setMarket] = useState<PublicMarket | null>(null);
+  const [priorAnalyses, setPriorAnalyses] = useState<AnalysisSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +47,7 @@ export function MarketDetailClient({ polymarketId }: MarketDetailClientProps) {
     let cancelled = false;
     setIsLoading(true);
     setError(null);
+    setPriorAnalyses([]);
 
     fetchPublicMarket(polymarketId)
       .then((payload) => {
@@ -56,6 +64,16 @@ export function MarketDetailClient({ polymarketId }: MarketDetailClientProps) {
         if (!cancelled) {
           setIsLoading(false);
         }
+      });
+
+    fetchAnalyses({ polymarket_id: polymarketId, limit: 5 })
+      .then((payload) => {
+        if (!cancelled) {
+          setPriorAnalyses(payload.items);
+        }
+      })
+      .catch(() => {
+        // Prior-run links are supplementary; the section is simply omitted on failure.
       });
 
     return () => {
@@ -152,9 +170,43 @@ export function MarketDetailClient({ polymarketId }: MarketDetailClientProps) {
             {isClosed ? "Market closed" : isAnalyzing ? "Starting analysis..." : "Analyze this market"}
           </button>
           {market.url ? (
-            <Link href={market.url} target="_blank" className="secondary-action w-full">
+            <Link
+              href={market.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="secondary-action w-full"
+            >
               Open on Polymarket
             </Link>
+          ) : null}
+          {priorAnalyses.length ? (
+            <div className="border-t border-black/10 pt-4">
+              <p className="section-label">Already analyzed</p>
+              <p className="mt-1 text-sm leading-6 text-ink/60">
+                The desk has {priorAnalyses.length === 1 ? "a memo" : "memos"} for this market —
+                open one before starting a duplicate run.
+              </p>
+              <div className="mt-2">
+                {priorAnalyses.map((item) => (
+                  <Link
+                    key={item.id}
+                    href={`/analyses/${item.id}`}
+                    className="flex items-center justify-between gap-3 border-b border-black/5 py-2 text-sm transition last:border-b-0 hover:text-pine"
+                  >
+                    <span className="font-semibold">
+                      {new Date(item.updated_at).toLocaleDateString(undefined, {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                    <Badge variant={item.status === "complete" ? "yes" : item.status === "failed" ? "no" : "warning"}>
+                      {item.status}
+                    </Badge>
+                  </Link>
+                ))}
+              </div>
+            </div>
           ) : null}
         </Panel>
       </section>

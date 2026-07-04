@@ -13,7 +13,9 @@ import {
 import { AnalysisAuditDrawer } from "@/components/analysis/analysis-audit-drawer";
 import { useAnalysisDetail } from "@/components/analysis/use-analysis-detail";
 import { Badge } from "@/components/ui/badge";
+import { DataState } from "@/components/ui/data-state";
 import { Panel } from "@/components/ui/panel";
+import { cn } from "@/lib/utils";
 
 type AnalysisDetailClientProps = {
   analysisId: string;
@@ -129,6 +131,29 @@ function formatCount(value: number, singular: string, plural = `${singular}s`) {
   return `${value} ${value === 1 ? singular : plural}`;
 }
 
+function formatEdgePoints(value: number) {
+  const points = value * 100;
+  const sign = points > 0 ? "+" : "";
+  return `${sign}${points.toFixed(1)} pts`;
+}
+
+function edgeTone(value: number) {
+  if (Math.abs(value) < 0.005) {
+    return "text-ink/60";
+  }
+  return value > 0 ? "text-pine" : "text-ember";
+}
+
+function edgeNote(value: number) {
+  if (Math.abs(value) < 0.005) {
+    return "The desk read matches the market price — no edge either way.";
+  }
+  if (value > 0) {
+    return "The desk sees YES as more likely than the market is pricing.";
+  }
+  return "The desk sees YES as less likely than the market is pricing.";
+}
+
 function formatElapsed(startedAt: string | null | undefined, completedAt?: string | null | undefined) {
   if (!startedAt) {
     return "Not started";
@@ -237,7 +262,12 @@ function SocialTimelineCard({ source }: { source: Source }) {
         {handle ? <span>@{handle}</span> : null}
         {trustConfidence !== null ? <span>{Math.round(trustConfidence * 100)}% trust confidence</span> : null}
         {source.url ? (
-          <Link href={source.url} target="_blank" className="font-medium text-pine">
+          <Link
+            href={source.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-pine"
+          >
             Open post
           </Link>
         ) : null}
@@ -447,7 +477,6 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
     !hasPointEstimate && !hasProbabilityRange && qualitativeLabel
       ? `Qualitative read: ${humanizeLabel(qualitativeLabel)}.`
       : null;
-  const modelNoteTitle = hasPointEstimate ? "NO probability" : hasProbabilityRange ? "Range note" : "Why no estimate";
   const openAudit = (focus?: AuditFocus) => {
     refreshDetail();
     setAuditFocus(focus ?? null);
@@ -466,7 +495,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
         focus={auditFocus}
       />
 
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6 break-words">
         <section id="analysis-summary" className="scroll-mt-24 border-b border-black/10 pb-5">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={badgeVariant(detail.request.status)}>{detail.request.status}</Badge>
@@ -508,9 +537,119 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
               </div>
             </div>
           ) : null}
+          {isFailed ? (
+            <DataState
+              variant="error"
+              title="This run failed before completing"
+              note={detail.request.error_message ?? "The run stopped before completion."}
+              onRetry={isRerunning ? undefined : () => void handleRerun()}
+              retryLabel={isRerunning ? "Rerunning..." : "Rerun analysis"}
+              className="mt-4 max-w-4xl"
+            />
+          ) : null}
         </section>
 
-        <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <Panel className="p-4 xl:hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="section-label">Run status</p>
+              <p className="mt-1 text-sm font-semibold text-ink">
+                {detail.progress.percent_complete}%
+                {" · "}
+                {isFailed ? "Stopped" : detail.progress.current_label ?? detail.request.status}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => openAudit({ section: "scoring" })}
+                disabled={!detail.audit}
+                className="primary-action"
+              >
+                How this was calculated
+              </button>
+              <button
+                type="button"
+                onClick={handleRerun}
+                disabled={isRerunning || isRunning}
+                className="secondary-action"
+              >
+                {isRerunning ? "Rerunning..." : "Rerun"}
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            {detailNavItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => scrollToDetailSection(item.id)}
+                className="quiet-action shrink-0 whitespace-nowrap"
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </Panel>
+
+        <Panel className="p-5">
+          <div className="grid gap-5 sm:grid-cols-3">
+            <div>
+              <p className="section-label">{probabilityTitle}</p>
+              <p className="stat-number mt-2">{probabilityValue}</p>
+              <p className="mt-2 text-sm leading-6 text-ink/60">
+                {hasPointEstimate
+                  ? `NO ${formatPercent(noPointEstimate)}`
+                  : hasProbabilityRange
+                    ? "This run produced a probability band without a single-point estimate."
+                    : [probabilityNote, detail.latest_run?.numeric_estimate_reason]
+                        .filter(Boolean)
+                        .join(" ") || "This run stayed qualitative-only."}
+              </p>
+            </div>
+            {hasPointEstimate && hasMarketPrior && marketPrior !== null && marketPrior !== undefined ? (
+              <>
+                <div>
+                  <p className="section-label">Edge vs market</p>
+                  <p
+                    className={cn(
+                      "mt-2 font-serif text-4xl font-medium leading-none tracking-[-0.01em] lining-nums tabular-nums",
+                      edgeTone((detail.latest_run?.p_hat ?? 0) - marketPrior),
+                    )}
+                  >
+                    {formatEdgePoints((detail.latest_run?.p_hat ?? 0) - marketPrior)}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-ink/60">
+                    {edgeNote((detail.latest_run?.p_hat ?? 0) - marketPrior)}
+                  </p>
+                </div>
+                <div>
+                  <p className="section-label">Polymarket prior</p>
+                  <p className="stat-number mt-2">{formatPercent(marketPrior)}</p>
+                  <p className="mt-2 text-sm leading-6 text-ink/60">
+                    YES midpoint before evidence adjustments.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div className="sm:col-span-2 sm:border-l sm:border-black/10 sm:pl-5">
+                <p className="section-label">Edge vs market</p>
+                <p className="mt-2 text-sm leading-7 text-ink/60">
+                  {hasMarketPrior
+                    ? "The market prior is linked, but this run has no point estimate to compare against it yet."
+                    : "No linked Polymarket market — this is an analysis-only read. There is no executable edge, and nothing here implies a trade."}
+                </p>
+                {hasMarketPrior ? (
+                  <p className="mt-2 text-sm leading-6 text-ink/60">
+                    Market prior: <span className="font-semibold text-ink">{formatPercent(marketPrior)}</span>
+                  </p>
+                ) : null}
+              </div>
+            )}
+          </div>
+        </Panel>
+
+        <section className="grid gap-3 sm:grid-cols-2">
           <Panel className="p-4">
             <p className="section-label">Recommendation</p>
             <p className="mt-3 text-lg font-semibold text-ink">
@@ -523,36 +662,6 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
             <p className="mt-3 text-lg font-semibold capitalize text-ink">
               {humanizeLabel(detail.latest_run?.confidence_label ?? "pending")}
             </p>
-          </Panel>
-          <Panel className="p-4">
-            <p className="section-label">{probabilityTitle}</p>
-            <p className="mt-3 text-lg font-semibold text-ink">{probabilityValue}</p>
-            {probabilityNote ? <p className="mt-2 text-sm leading-6 text-ink/60">{probabilityNote}</p> : null}
-          </Panel>
-          <Panel className="p-4">
-            <p className="section-label">Polymarket prior</p>
-            <p className="mt-3 text-lg font-semibold text-ink">
-              {hasMarketPrior ? formatPercent(marketPrior) : "Not linked"}
-            </p>
-            <p className="mt-2 text-sm leading-6 text-ink/60">
-              {hasMarketPrior
-                ? "YES midpoint before evidence adjustments."
-                : "The model read is analysis-only."}
-            </p>
-          </Panel>
-          <Panel className="p-4">
-            <p className="section-label">{hasPointEstimate ? "Model NO read" : modelNoteTitle}</p>
-            {hasPointEstimate ? (
-              <p className="mt-3 text-lg font-semibold text-ink">{formatPercent(noPointEstimate)}</p>
-            ) : hasProbabilityRange ? (
-              <p className="mt-3 text-sm leading-6 text-ink/60">
-                This run produced a probability band without a single-point estimate.
-              </p>
-            ) : (
-              <p className="mt-3 text-sm leading-6 text-ink/60">
-                {detail.latest_run?.numeric_estimate_reason ?? "This run stayed qualitative-only."}
-              </p>
-            )}
           </Panel>
         </section>
 
@@ -588,11 +697,13 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
                 ))
               ) : (
                 <SectionPlaceholder
-                  title="Factors being scored"
+                  title={isFailed ? "Factor scoring did not finish" : "Factors being scored"}
                   note={
                     isRunning
                       ? artifactStatusMap.get("factor_mapping")?.note ?? "Directional YES evidence will appear here after factor mapping finishes."
-                      : "This run did not surface scored YES-side evidence."
+                      : isFailed
+                        ? "The run stopped before YES-side evidence could be scored. Rerun the analysis to complete it."
+                        : "This run did not surface scored YES-side evidence."
                   }
                 />
               )}
@@ -613,11 +724,13 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
                 ))
               ) : (
                 <SectionPlaceholder
-                  title="Factors being scored"
+                  title={isFailed ? "Factor scoring did not finish" : "Factors being scored"}
                   note={
                     isRunning
                       ? artifactStatusMap.get("factor_mapping")?.note ?? "Directional NO evidence will appear here after factor mapping finishes."
-                      : "This run did not surface scored NO-side evidence."
+                      : isFailed
+                        ? "The run stopped before NO-side evidence could be scored. Rerun the analysis to complete it."
+                        : "This run did not surface scored NO-side evidence."
                   }
                 />
               )}
@@ -638,11 +751,13 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
               </div>
             ) : (
               <SectionPlaceholder
-                title="Context still assembling"
+                title={isFailed ? "Context assembly did not finish" : "Context still assembling"}
                 note={
                   isRunning
                     ? artifactStatusMap.get("factor_mapping")?.note ?? "Contextual and non-scored evidence will appear here once factor mapping finishes."
-                    : "No contextual-only evidence was stored for this run."
+                    : isFailed
+                      ? "The run stopped before contextual evidence was assembled."
+                      : "No contextual-only evidence was stored for this run."
                 }
               />
             )}
@@ -751,7 +866,12 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
                     <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-ink/60">
                       {grounding ? <span>{grounding.wordCount} words grounded</span> : null}
                       {source.url ? (
-                        <Link href={source.url} target="_blank" className="font-medium text-pine">
+                        <Link
+                          href={source.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-pine"
+                        >
                           Open source
                         </Link>
                       ) : null}
@@ -772,7 +892,7 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
         </Panel>
       </div>
 
-      <aside className="space-y-5 xl:sticky xl:top-24 xl:self-start">
+      <aside className="min-w-0 space-y-5 break-words xl:sticky xl:top-24 xl:self-start">
         <Panel className="space-y-4 p-4">
           <div className="border-b border-black/10 pb-3">
             <p className="section-label">Actions</p>

@@ -239,12 +239,29 @@ def test_manual_analysis_links_existing_market(client, session_factory: sessionm
     assert response.status_code == 202
     payload = response.json()["request"]
     assert payload["market_id"] == market_id
+    assert payload["market_title"] == "Will the Fed cut by June 2026?"
 
     market_response = client.get("/api/markets")
     assert market_response.status_code == 200
     market_payload = market_response.json()
     assert market_payload["total"] == 1
     assert market_payload["items"][0]["polymarket_id"] == "fed-cut-june-2026"
+
+    list_response = client.get("/api/analyses")
+    assert list_response.status_code == 200
+    summaries = list_response.json()["items"]
+    assert summaries[0]["market_title"] == "Will the Fed cut by June 2026?"
+
+    filtered = client.get("/api/analyses", params={"polymarket_id": "fed-cut-june-2026"})
+    assert filtered.status_code == 200
+    filtered_payload = filtered.json()
+    assert filtered_payload["total"] == 1
+    assert filtered_payload["items"][0]["market_id"] == market_id
+
+    unmatched = client.get("/api/analyses", params={"polymarket_id": "some-other-market"})
+    assert unmatched.status_code == 200
+    assert unmatched.json()["total"] == 0
+    assert unmatched.json()["items"] == []
 
 
 def test_public_market_discovery_lists_remote_polymarket_markets(client):
@@ -275,7 +292,23 @@ def test_public_market_discovery_lists_remote_polymarket_markets(client):
                     event_slug="bitcoin-100k-2026",
                     image="https://example.com/bitcoin.png",
                     featured=True,
-                )
+                ),
+                ResolvedMarketRecord(
+                    polymarket_id="bitcoin-120k-2026",
+                    title="Will Bitcoin hit $120k in 2026?",
+                    url="https://polymarket.com/event/bitcoin-120k-2026",
+                    rules_text="Resolves YES if Bitcoin trades above $120k in 2026.",
+                    description="Crypto market",
+                    yes_bid=0.21,
+                    yes_ask=0.23,
+                    no_bid=0.77,
+                    no_ask=0.79,
+                    liquidity=75000,
+                    volume_24h=12000,
+                    spread=0.02,
+                    expiry_at=None,
+                    status="active",
+                ),
             ]
 
     app.dependency_overrides[get_polymarket_client] = lambda: StubPolymarketClient()
@@ -284,7 +317,8 @@ def test_public_market_discovery_lists_remote_polymarket_markets(client):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["total"] == 1
+    assert payload["total"] == 2
+    assert payload["has_more"] is True
     assert payload["items"][0]["polymarket_id"] == "bitcoin-100k-2026"
     assert payload["items"][0]["category"] == "Crypto"
     assert payload["items"][0]["featured"] is True

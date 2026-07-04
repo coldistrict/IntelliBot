@@ -76,9 +76,13 @@ def discover_markets(
     client: PolymarketClient = Depends(get_polymarket_client),
 ) -> PublicMarketListResponse:
     records = client.discover_markets(query=q, view=view, limit=limit, offset=offset)
+    has_more = not q and len(records) == limit
     return PublicMarketListResponse(
         items=[_public_market_response(record) for record in records],
-        total=len(records),
+        # The upstream discovery feed has no real total; this counts markets
+        # enumerated through this page. has_more signals further pages.
+        total=offset + len(records),
+        has_more=has_more,
     )
 
 
