@@ -11,6 +11,8 @@ from app.models.enums import (
     ConsensusStrengthEnum,
     DirectnessEnum,
     EvidenceRoleEnum,
+    AttemptReasonEnum,
+    ExecutionResultModeEnum,
     InputTypeEnum,
     ModeEnum,
     NarrativePhaseEnum,
@@ -18,6 +20,7 @@ from app.models.enums import (
     QualitativeLabelEnum,
     RecommendationLabelEnum,
     RequestStatusEnum,
+    RunQualityEnum,
     ReviewDecisionEnum,
     SourceKindEnum,
     SourceTierEnum,
@@ -38,6 +41,7 @@ class ManualAnalysisCreateRequest(BaseModel):
     template_requested: TemplateKey | None = None
     include_premium: bool = False
     include_live_x_intelligence: bool | None = None
+    confirmed_polymarket_market_id: str | None = None
 
     @model_validator(mode="after")
     def validate_exactly_one_primary_input(self) -> "ManualAnalysisCreateRequest":
@@ -82,6 +86,7 @@ class RuleParseResponse(ORMModel):
     no_condition: str
     deadline_text: str | None
     deadline_utc: datetime | None
+    deadline_provenance: dict[str, Any] = Field(default_factory=dict)
     timezone_text: str | None
     resolution_definition: str | None
     directional_scoring_policy: dict[str, Any]
@@ -127,6 +132,11 @@ class AnalysisRunResponse(ORMModel):
     recommendation_label: RecommendationLabelEnum
     why_wrong_summary: str | None
     final_summary: str | None
+    quality_state: RunQualityEnum = RunQualityEnum.UNKNOWN
+    quality_reasons: list[dict[str, Any]] = Field(default_factory=list)
+    attempt_reason: AttemptReasonEnum = AttemptReasonEnum.ORIGINAL
+    market_match_json: dict[str, Any] = Field(default_factory=dict)
+    evidence_update: float | None = None
     created_at: datetime
     recommendation: RecommendationResponse | None = None
 
@@ -171,6 +181,8 @@ class SourceResponse(ORMModel):
     canonical_url: str | None
     is_paywalled: bool
     metadata_json: dict[str, Any]
+    lane: str = "unknown"
+    exclusion_reason: str | None = None
     created_at: datetime
 
 
@@ -302,6 +314,8 @@ class AuditRuleInterpretationResponse(BaseModel):
     yes_condition: str | None = None
     no_condition: str | None = None
     deadline_text: str | None = None
+    deadline_utc: datetime | None = None
+    deadline_provenance: dict[str, Any] = Field(default_factory=dict)
     resolution_definition: str | None = None
     clarity_score: float | None = None
     resolution_risk: float | None = None
@@ -364,6 +378,8 @@ class ProbabilityMathResponse(BaseModel):
     crowd_signal_evidence: float = 0.0
     total_evidence: float
     p_hat: float | None = None
+    evidence_update: float | None = None
+    price_history_signal: dict[str, Any] = Field(default_factory=dict)
 
 
 class UncertaintyAdjustmentResponse(BaseModel):
@@ -371,6 +387,8 @@ class UncertaintyAdjustmentResponse(BaseModel):
     label: str
     amount: float
     note: str
+    band: str | None = None
+    days_remaining: float | None = None
 
 
 class UncertaintyMathResponse(BaseModel):
@@ -431,11 +449,17 @@ class AnalysisRequestSummary(ORMModel):
     current_stage_note: str | None = None
     display_summary: str | None = None
     qualitative_label: QualitativeLabelEnum | None = None
+    quality_state: RunQualityEnum = RunQualityEnum.UNKNOWN
+    quality_reasons: list[dict[str, Any]] = Field(default_factory=list)
+    journal_event_count: int = 0
+    estimated_cost_usd: float = 0.0
+    market_match_confidence: str | None = None
 
 
 class AnalysisListResponse(BaseModel):
     items: list[AnalysisRequestSummary]
     total: int
+    status_counts: dict[str, int] = Field(default_factory=dict)
 
 
 class AnalysisQueuedResponse(BaseModel):
@@ -468,3 +492,65 @@ class AnalysisDetailResponse(BaseModel):
     fact_claims: list[FactClaimResponse] = Field(default_factory=list)
     factors: list[FactorResponse] = Field(default_factory=list)
     reviews: list[ReviewResponse] = Field(default_factory=list)
+
+
+class ExecutionEventResponse(ORMModel):
+    id: int
+    request_id: int
+    analysis_run_id: int | None
+    stage_key: str
+    event_kind: str
+    provider: str | None
+    model: str | None
+    task_name: str | None
+    prompt_version: str | None
+    result_mode: ExecutionResultModeEnum
+    cache_hit: bool
+    attempt_count: int
+    latency_ms: int
+    prompt_tokens: int
+    completion_tokens: int
+    estimated_cost_usd: float
+    error_class: str | None
+    detail_json: dict[str, Any]
+    created_at: datetime
+
+
+class ExecutionTotalsResponse(BaseModel):
+    calls: int
+    cache_hits: int
+    tokens: int
+    estimated_cost_usd: float
+
+
+class AnalysisLedgerResponse(BaseModel):
+    stages: list[ExecutionEventResponse]
+    calls: list[ExecutionEventResponse]
+    run_quality: RunQualityEnum
+    quality_reasons: list[dict[str, Any]] = Field(default_factory=list)
+    totals: ExecutionTotalsResponse
+
+
+class JournalBeforeRequest(BaseModel):
+    prior_probability: float = Field(ge=0.0, le=1.0)
+    intended_action: str = Field(pattern="^(yes|no|no_bet)$")
+    entry_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class JournalAfterRequest(BaseModel):
+    decision: str = Field(pattern="^(yes|no|no_bet)$")
+    conviction: int = Field(ge=1, le=5)
+    rationale: str = Field(min_length=1, max_length=4000)
+    what_changed: str = Field(max_length=4000)
+
+
+class JournalEventResponse(ORMModel):
+    id: int
+    analysis_run_id: int
+    event_type: str
+    payload_json: dict[str, Any]
+    created_at: datetime
+
+
+class JournalResponse(BaseModel):
+    events: list[JournalEventResponse]

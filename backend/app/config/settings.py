@@ -45,6 +45,15 @@ class Settings(BaseSettings):
     polymarket_gamma_base_url: str = "https://gamma-api.polymarket.com"
     polymarket_clob_base_url: str = "https://clob.polymarket.com"
     premium_session_state_path: Path | None = None
+    outcome_refresh_enabled: bool = True
+    outcome_refresh_interval_minutes: int = 60
+    outcome_refresh_cooldown_seconds: int = 30
+    outcome_refresh_startup_retry_seconds: int = 15
+    max_run_calls: int = 120
+    max_run_tokens: int = 500_000
+    max_run_cost_usd: float = 5.0
+    max_run_wall_seconds: int = 600
+    fred_base_url: str = "https://api.stlouisfed.org/fred"
 
     @field_validator(
         "openai_api_key",

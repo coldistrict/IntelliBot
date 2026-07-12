@@ -3,8 +3,22 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from app.models import AnalysisRequest, AnalysisRun, Market, Recommendation, RuleParse, Snapshot
-from app.models.enums import RequestStatusEnum, SnapshotTypeEnum
+from sqlalchemy import func, select
+
+from app.config.settings import get_settings
+from app.models import (
+    AnalysisRequest,
+    AnalysisRun,
+    ExecutionEvent,
+    Market,
+    PublishedForecast,
+    Recommendation,
+    RuleParse,
+    Snapshot,
+    Source,
+)
+from app.models.enums import RequestStatusEnum, RunQualityEnum, SnapshotTypeEnum, SourceKindEnum
+from app.services.analysis_execution import derive_quality, finalize_stage_ledger
 from app.services.analysis_progress import mark_stage_complete, mark_stage_running
 
 if TYPE_CHECKING:
@@ -71,6 +85,15 @@ def run_briefing_stage(
     analysis_run.recommendation_label = score_outcome.recommendation.recommendation_label
     analysis_run.final_summary = brief.final_summary
     analysis_run.why_wrong_summary = brief.why_wrong_summary
+    analysis_run.evidence_update = (
+        round(analysis_run.p_hat - analysis_run.market_mid_prob, 4)
+        if analysis_run.p_hat is not None and analysis_run.market_mid_prob is not None
+        else None
+    )
+    analysis_run.market_match_json = {
+        **(analysis_run.market_match_json or {}),
+        "price_history_signal": score_outcome.price_history_signal,
+    }
 
     recommendation = Recommendation(
         analysis_run_id=analysis_run.id,
@@ -104,4 +127,72 @@ def run_briefing_stage(
     request.error_message = None
     request.completed_at = datetime.now(UTC)
     session.add(request)
+    session.flush()
+    finalize_stage_ledger(session, request, analysis_run.id)
+    events = list(
+        session.scalars(
+            select(ExecutionEvent).where(ExecutionEvent.analysis_run_id == analysis_run.id)
+        ).all()
+    )
+    has_directional_evidence = any(
+        factor.used_in_scoring and factor.stance.value in {"yes", "no"} for factor in factors
+    )
+    quality, reasons = derive_quality(events, has_directional_evidence=has_directional_evidence)
+    run_sources = list(
+        session.scalars(select(Source).where(Source.analysis_run_id == analysis_run.id)).all()
+    )
+    excluded_sources = [source for source in run_sources if source.exclusion_reason]
+    if excluded_sources:
+        reasons.append(
+            {
+                "code": "retrieval_contamination_rejected",
+                "source_ids": [source.id for source in excluded_sources],
+            }
+        )
+        if quality == RunQualityEnum.CLEAN:
+            quality = RunQualityEnum.WARNING
+    usable_research_sources = [
+        source
+        for source in run_sources
+        if not source.exclusion_reason and source.source_kind != SourceKindEnum.MANUAL_INPUT
+    ]
+    if not usable_research_sources:
+        reasons.append({"code": "no_usable_retrieval"})
+        quality = RunQualityEnum.INVALID
+    analysis_run.quality_state = quality
+    analysis_run.quality_reasons = reasons
+    session.add(analysis_run)
+
+    prior_forecasts = session.scalar(
+        select(func.count()).select_from(PublishedForecast).where(
+            PublishedForecast.request_id == request.id
+        )
+    ) or 0
+    settings = get_settings()
+    session.add(
+        PublishedForecast(
+            analysis_run_id=analysis_run.id,
+            request_id=request.id,
+            market_id=market.id if market else None,
+            published_at=request.completed_at,
+            model_version=f"{settings.openai_model}+{settings.xai_social_model}",
+            prompt_versions_json={
+                event.task_name: event.prompt_version
+                for event in events
+                if event.task_name and event.prompt_version
+            },
+            market_snapshot_json={
+                "yes_bid": market.yes_bid if market else None,
+                "yes_ask": market.yes_ask if market else None,
+                "no_bid": market.no_bid if market else None,
+                "no_ask": market.no_ask if market else None,
+                "midpoint_yes": analysis_run.market_mid_prob,
+            },
+            quality_state=quality,
+            attempt_reason=analysis_run.attempt_reason,
+            is_repeat=prior_forecasts > 0,
+            p_hat=analysis_run.p_hat,
+            market_mid_prob=analysis_run.market_mid_prob,
+        )
+    )
     session.commit()

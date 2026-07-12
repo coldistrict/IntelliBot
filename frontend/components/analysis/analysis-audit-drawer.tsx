@@ -200,12 +200,16 @@ export function AnalysisAuditDrawer({
                     <p className="section-label">Evidence mix</p>
                     <div className="mt-3 space-y-2 text-sm text-ink/70">
                       <p>Prior: {formatPercent(audit.probability?.prior_probability)}</p>
+                      <p>Evidence update: {audit.probability?.evidence_update !== null && audit.probability?.evidence_update !== undefined ? formatSigned(audit.probability.evidence_update) : "Unavailable"}</p>
                       <p>Non-social evidence: {audit.probability ? formatSigned(audit.probability.non_social_evidence) : "Unavailable"}</p>
                       <p>Capped social evidence: {audit.probability ? formatSigned(audit.probability.capped_social_evidence) : "Unavailable"}</p>
                       <p>Crowd signal: {audit.probability ? formatSigned(audit.probability.crowd_signal_evidence ?? 0) : "Unavailable"}</p>
                       <p>Total evidence: {audit.probability ? formatSigned(audit.probability.total_evidence) : "Unavailable"}</p>
                       <p>{audit.probability?.numeric_estimate_available ? "Approved p_hat" : "Model p_hat"}: {formatPercent(audit.probability?.p_hat)}</p>
                       <p>Model NO complement: {formatPercent(complementProbability(audit.probability?.p_hat))}</p>
+                      {audit.probability?.price_history_signal?.reason ? (
+                        <p>Market reaction: {String(audit.probability.price_history_signal.reason)}</p>
+                      ) : null}
                     </div>
                     {audit.social_modifier?.crowd_signal_reason ? (
                       <p className="mt-3 text-sm leading-7 text-ink/60">

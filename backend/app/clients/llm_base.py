@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from time import perf_counter
 from typing import Any, TypeVar
 
 import httpx
@@ -9,6 +10,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.services.model_cache import get_cached_response, hash_payload, store_cached_response
+from app.models.enums import ExecutionResultModeEnum
+from app.services.analysis_execution import enforce_run_budget, record_model_call
 
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
 
@@ -87,7 +90,19 @@ class StructuredChatClient:
             input_hash=input_hash,
         )
         if cached is not None:
+            record_model_call(
+                session,
+                provider=self.provider,
+                model=self.model,
+                task_name=task_name,
+                prompt_version=prompt_version,
+                result_mode=ExecutionResultModeEnum.MODEL,
+                started_at=perf_counter(),
+                cache_hit=True,
+            )
             return schema_model.model_validate(cached)
+
+        enforce_run_budget(session, task_name=task_name)
 
         payload = {
             "model": self.model,
@@ -105,9 +120,33 @@ class StructuredChatClient:
                 },
             },
         }
-        response_payload = self._post_json("/chat/completions", payload)
-        content = self._extract_content(response_payload)
-        parsed = schema_model.model_validate_json(content)
+        started_at = perf_counter()
+        try:
+            response_payload = self._post_json("/chat/completions", payload)
+            content = self._extract_content(response_payload)
+            parsed = schema_model.model_validate_json(content)
+        except Exception as exc:
+            record_model_call(
+                session,
+                provider=self.provider,
+                model=self.model,
+                task_name=task_name,
+                prompt_version=prompt_version,
+                result_mode=ExecutionResultModeEnum.FAILED,
+                started_at=started_at,
+                error=exc,
+            )
+            raise
+        record_model_call(
+            session,
+            provider=self.provider,
+            model=self.model,
+            task_name=task_name,
+            prompt_version=prompt_version,
+            result_mode=ExecutionResultModeEnum.MODEL,
+            started_at=started_at,
+            response_payload=response_payload,
+        )
         store_cached_response(
             session,
             provider=self.provider,

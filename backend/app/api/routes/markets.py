@@ -8,12 +8,16 @@ from app.db.session import get_db_session
 from app.models import Market
 from app.schemas.market import (
     MarketListResponse,
+    MarketLinkCandidate,
+    MarketLinkCandidatesRequest,
+    MarketLinkCandidatesResponse,
     MarketResponse,
     PublicMarketListResponse,
     PublicMarketResponse,
     ResearchEdgeSignalResponse,
 )
 from app.services.market_signals import research_edge_signals_for_records
+from app.services.market_matching import assess_market_match
 
 router = APIRouter(prefix="/markets")
 
@@ -67,6 +71,42 @@ def _record_from_market(market: Market) -> ResolvedMarketRecord:
         spread=market.spread,
         expiry_at=market.expiry_at,
         status=market.status,
+    )
+
+
+@router.post("/link-candidates", response_model=MarketLinkCandidatesResponse)
+def link_candidates(
+    payload: MarketLinkCandidatesRequest,
+    session: Session = Depends(get_db_session),
+    client: PolymarketClient = Depends(get_polymarket_client),
+) -> MarketLinkCandidatesResponse:
+    records = [_record_from_market(market) for market in session.scalars(select(Market).limit(200)).all()]
+    records.extend(client.search_markets_for_claim(payload.custom_claim, limit=10))
+    unique: dict[str, ResolvedMarketRecord] = {}
+    for record in records:
+        if record.polymarket_id and record.status != "closed":
+            unique[record.polymarket_id] = record
+    assessed = sorted(
+        ((assess_market_match(payload.custom_claim, record), record) for record in unique.values()),
+        key=lambda item: item[0].score,
+        reverse=True,
+    )[:5]
+    candidates: list[MarketLinkCandidate] = []
+    for index, (assessment, record) in enumerate(assessed):
+        next_score = assessed[index + 1][0].score if index + 1 < len(assessed) else 0.0
+        candidates.append(
+            MarketLinkCandidate(
+                market_id=record.polymarket_id,
+                title=record.title,
+                score=assessment.score,
+                margin=round(assessment.score - next_score, 4),
+                reason_codes=assessment.reason_codes,
+                confidence=assessment.confidence,
+            )
+        )
+    return MarketLinkCandidatesResponse(
+        candidates=candidates,
+        auto_link=bool(assessed and assessed[0][0].auto_link),
     )
 
 

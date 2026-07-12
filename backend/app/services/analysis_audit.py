@@ -23,6 +23,7 @@ from app.models.enums import (
     StanceEnum,
 )
 from app.services.analysis_progress import build_progress_snapshot
+from app.services.deadline_policy import deadline_uncertainty_adjustment
 from app.services.analysis_scoring import (
     BASE_UNCERTAINTY,
     MAX_SOCIAL_EVIDENCE,
@@ -264,6 +265,12 @@ def build_analysis_audit(
             }
         )
 
+    horizon_adjustment = deadline_uncertainty_adjustment(
+        rule_parse.deadline_utc or (analysis_run.market.expiry_at if analysis_run.market else None)
+    )
+    if horizon_adjustment:
+        uncertainty_adjustments.append(horizon_adjustment)
+
     if analysis_run.priced_in_risk_label == PricedInRiskLabelEnum.MEDIUM:
         uncertainty_adjustments.append(
             {
@@ -407,6 +414,8 @@ def build_analysis_audit(
             "yes_condition": rule_parse.yes_condition,
             "no_condition": rule_parse.no_condition,
             "deadline_text": rule_parse.deadline_text,
+            "deadline_utc": rule_parse.deadline_utc,
+            "deadline_provenance": rule_parse.deadline_provenance,
             "resolution_definition": rule_parse.resolution_definition,
             "clarity_score": rule_parse.clarity_score,
             "resolution_risk": rule_parse.resolution_risk,
@@ -448,6 +457,8 @@ def build_analysis_audit(
             "crowd_signal_evidence": crowd_signal.evidence_delta,
             "total_evidence": round(total_evidence, 4),
             "p_hat": analysis_run.p_hat,
+            "evidence_update": analysis_run.evidence_update,
+            "price_history_signal": (analysis_run.market_match_json or {}).get("price_history_signal", {}),
         },
         "uncertainty": {
             "base_uncertainty": round(base_uncertainty, 4),

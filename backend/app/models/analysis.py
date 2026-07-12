@@ -12,6 +12,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -26,12 +27,16 @@ from app.models.enums import (
     DirectnessEnum,
     EvidenceRoleEnum,
     InputTypeEnum,
+    AttemptReasonEnum,
+    ExecutionResultModeEnum,
+    JournalEventTypeEnum,
     ModeEnum,
     NarrativePhaseEnum,
     PricedInRiskLabelEnum,
     QualitativeLabelEnum,
     RecommendationLabelEnum,
     RequestStatusEnum,
+    RunQualityEnum,
     ReviewDecisionEnum,
     SnapshotTypeEnum,
     SourceKindEnum,
@@ -82,6 +87,9 @@ class AnalysisRequest(TimestampMixin, Base):
     analysis_runs: Mapped[list["AnalysisRun"]] = relationship(
         back_populates="request", cascade="all, delete-orphan"
     )
+    execution_events: Mapped[list["ExecutionEvent"]] = relationship(
+        back_populates="request", cascade="all, delete-orphan"
+    )
 
 
 class RuleParse(Base):
@@ -115,6 +123,7 @@ class RuleParse(Base):
     clarity_score: Mapped[float] = mapped_column(Float, nullable=False)
     resolution_risk: Mapped[float] = mapped_column(Float, nullable=False)
     suitable_for_auto: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    deadline_provenance: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     template_detected: Mapped[TemplateKey] = mapped_column(
         enum_column(TemplateKey, "template_key_enum"), nullable=False
     )
@@ -163,6 +172,19 @@ class AnalysisRun(Base):
     )
     why_wrong_summary: Mapped[str | None] = mapped_column(Text)
     final_summary: Mapped[str | None] = mapped_column(Text)
+    quality_state: Mapped[RunQualityEnum] = mapped_column(
+        enum_column(RunQualityEnum, "run_quality_enum"),
+        default=RunQualityEnum.UNKNOWN,
+        nullable=False,
+    )
+    quality_reasons: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
+    attempt_reason: Mapped[AttemptReasonEnum] = mapped_column(
+        enum_column(AttemptReasonEnum, "attempt_reason_enum"),
+        default=AttemptReasonEnum.ORIGINAL,
+        nullable=False,
+    )
+    market_match_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    evidence_update: Mapped[float | None] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
@@ -195,6 +217,15 @@ class AnalysisRun(Base):
         back_populates="analysis_run", cascade="all, delete-orphan"
     )
     snapshots: Mapped[list["Snapshot"]] = relationship(back_populates="analysis_run")
+    execution_events: Mapped[list["ExecutionEvent"]] = relationship(
+        back_populates="analysis_run", cascade="all, delete-orphan"
+    )
+    published_forecast: Mapped["PublishedForecast | None"] = relationship(
+        back_populates="analysis_run", cascade="all, delete-orphan", uselist=False
+    )
+    journal_events: Mapped[list["JournalEvent"]] = relationship(
+        back_populates="analysis_run", cascade="all, delete-orphan"
+    )
 
 
 class Source(Base):
@@ -220,6 +251,8 @@ class Source(Base):
     canonical_url: Mapped[str | None] = mapped_column(String(1000))
     is_paywalled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    lane: Mapped[str] = mapped_column(String(64), default="unknown", nullable=False)
+    exclusion_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
@@ -442,3 +475,71 @@ class Snapshot(Base):
 
     market: Mapped["Market"] = relationship(back_populates="snapshots")
     analysis_run: Mapped["AnalysisRun | None"] = relationship(back_populates="snapshots")
+
+
+class ExecutionEvent(Base):
+    __tablename__ = "execution_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    request_id: Mapped[int] = mapped_column(ForeignKey("analysis_requests.id"), nullable=False, index=True)
+    analysis_run_id: Mapped[int | None] = mapped_column(ForeignKey("analysis_runs.id"), index=True)
+    stage_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    event_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    provider: Mapped[str | None] = mapped_column(String(64))
+    model: Mapped[str | None] = mapped_column(String(255))
+    task_name: Mapped[str | None] = mapped_column(String(128))
+    prompt_version: Mapped[str | None] = mapped_column(String(128))
+    result_mode: Mapped[ExecutionResultModeEnum] = mapped_column(
+        enum_column(ExecutionResultModeEnum, "execution_result_mode_enum"), nullable=False
+    )
+    cache_hit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    estimated_cost_usd: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    error_class: Mapped[str | None] = mapped_column(String(255))
+    detail_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    request: Mapped["AnalysisRequest"] = relationship(back_populates="execution_events")
+    analysis_run: Mapped["AnalysisRun | None"] = relationship(back_populates="execution_events")
+
+
+class PublishedForecast(Base):
+    __tablename__ = "published_forecasts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    analysis_run_id: Mapped[int] = mapped_column(ForeignKey("analysis_runs.id"), nullable=False, unique=True, index=True)
+    request_id: Mapped[int] = mapped_column(ForeignKey("analysis_requests.id"), nullable=False, index=True)
+    market_id: Mapped[int | None] = mapped_column(ForeignKey("markets.id"), index=True)
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    model_version: Mapped[str] = mapped_column(String(255), nullable=False)
+    prompt_versions_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    market_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    quality_state: Mapped[RunQualityEnum] = mapped_column(
+        enum_column(RunQualityEnum, "published_forecast_quality_enum"), nullable=False
+    )
+    attempt_reason: Mapped[AttemptReasonEnum] = mapped_column(
+        enum_column(AttemptReasonEnum, "published_forecast_attempt_reason_enum"), nullable=False
+    )
+    is_repeat: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    p_hat: Mapped[float | None] = mapped_column(Float)
+    market_mid_prob: Mapped[float | None] = mapped_column(Float)
+
+    analysis_run: Mapped["AnalysisRun"] = relationship(back_populates="published_forecast")
+
+
+class JournalEvent(Base):
+    __tablename__ = "journal_events"
+    __table_args__ = (UniqueConstraint("analysis_run_id", "event_type", "created_at", name="uq_journal_event_time"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    analysis_run_id: Mapped[int] = mapped_column(ForeignKey("analysis_runs.id"), nullable=False, index=True)
+    event_type: Mapped[JournalEventTypeEnum] = mapped_column(
+        enum_column(JournalEventTypeEnum, "journal_event_type_enum"), nullable=False
+    )
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    analysis_run: Mapped["AnalysisRun"] = relationship(back_populates="journal_events")

@@ -69,6 +69,8 @@ function CompactRunRow({ item }: { item: AnalysisSummary }) {
 
 export function DeskLaunchpad() {
   const [items, setItems] = useState<AnalysisSummary[]>([]);
+  const [totalRuns, setTotalRuns] = useState(0);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const [status, setStatus] = useState<ProviderStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -80,6 +82,13 @@ export function DeskLaunchpad() {
         fetchProviderStatus(),
       ]);
       setItems(analyses.items);
+      setTotalRuns(analyses.total);
+      setStatusCounts(
+        analyses.status_counts ?? analyses.items.reduce<Record<string, number>>((counts, item) => {
+          counts[item.status] = (counts[item.status] ?? 0) + 1;
+          return counts;
+        }, {}),
+      );
       setStatus(providerStatus);
       setError(null);
     } catch (loadError) {
@@ -109,6 +118,8 @@ export function DeskLaunchpad() {
     () => items.filter((item) => item.status === "complete" || item.status === "failed"),
     [items],
   );
+  const activeCount = (statusCounts.queued ?? 0) + (statusCounts.running ?? 0);
+  const finishedCount = (statusCounts.complete ?? 0) + (statusCounts.failed ?? 0);
   const running = allRunning.slice(0, 3);
   const recent = allFinished.slice(0, 4);
   const rows = providerRows(status);
@@ -164,12 +175,12 @@ export function DeskLaunchpad() {
           <div className="grid gap-3 sm:grid-cols-3">
             <Panel className="p-4">
               <p className="section-label">Active</p>
-              <p className="stat-number mt-2">{isUnavailable || !hasLoaded ? "—" : allRunning.length}</p>
-              <p className="mt-1 text-sm text-ink/60">Queued or running</p>
+              <p className="stat-number mt-2">{isUnavailable || !hasLoaded ? "—" : activeCount}</p>
+              <p className="mt-1 text-sm text-ink/60">Queued or running · {totalRuns} total</p>
             </Panel>
             <Panel className="p-4">
               <p className="section-label">Finished</p>
-              <p className="stat-number mt-2">{isUnavailable || !hasLoaded ? "—" : allFinished.length}</p>
+              <p className="stat-number mt-2">{isUnavailable || !hasLoaded ? "—" : finishedCount}</p>
               <p className="mt-1 text-sm text-ink/60">Completed or failed runs</p>
             </Panel>
             <Panel className="p-4">

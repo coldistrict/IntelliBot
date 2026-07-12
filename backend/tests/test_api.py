@@ -41,6 +41,50 @@ def test_health_endpoint(client):
     assert payload["service"] == "backend"
 
 
+def test_ledger_and_event_sourced_journal_endpoints(client):
+    created = client.post(
+        "/api/analyses/manual",
+        json={"custom_claim": "Will the Federal Reserve cut rates at its next meeting?"},
+    )
+    analysis_id = created.json()["request"]["id"]
+
+    ledger = client.get(f"/api/analyses/{analysis_id}/ledger")
+    assert ledger.status_code == 200
+    ledger_payload = ledger.json()
+    assert len(ledger_payload["stages"]) >= 5
+    assert ledger_payload["calls"]
+    assert ledger_payload["run_quality"] in {"warning", "invalid"}
+
+    before = client.post(
+        f"/api/analyses/{analysis_id}/journal/before",
+        json={"prior_probability": 0.35, "intended_action": "no_bet", "entry_threshold": None},
+    )
+    assert before.status_code == 200
+    after_one = client.post(
+        f"/api/analyses/{analysis_id}/journal/after",
+        json={
+            "decision": "no",
+            "conviction": 3,
+            "rationale": "The memo showed no edge.",
+            "what_changed": "Lowered the prior.",
+        },
+    )
+    after_two = client.post(
+        f"/api/analyses/{analysis_id}/journal/after",
+        json={
+            "decision": "no_bet",
+            "conviction": 2,
+            "rationale": "Risk limit changed.",
+            "what_changed": "Skipped the decision.",
+        },
+    )
+    assert after_one.status_code == 200
+    assert after_two.status_code == 200
+    events = client.get(f"/api/analyses/{analysis_id}/journal").json()["events"]
+    assert [event["event_type"] for event in events] == ["before", "after", "after"]
+    assert all(event["created_at"] for event in events)
+
+
 def test_manual_analysis_submission_and_detail(client):
     create_response = client.post(
         "/api/analyses/manual",

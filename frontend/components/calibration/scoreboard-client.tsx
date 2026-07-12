@@ -228,6 +228,26 @@ export function ScoreboardClient() {
         </Panel>
       </section>
 
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Panel className="p-4"><p className="section-label">Published forecasts</p><p className="stat-number mt-2">{summary?.published_forecasts ?? 0}</p><p className="mt-1 text-sm text-ink/60">Immutable scored attempts</p></Panel>
+        <Panel className="p-4"><p className="section-label">Distinct markets</p><p className="stat-number mt-2">{summary?.distinct_markets ?? 0}</p><p className="mt-1 text-sm text-ink/60">Unique proposition outcomes</p></Panel>
+        <Panel className="p-4"><p className="section-label">Repeated forecasts</p><p className="stat-number mt-2">{summary?.repeated_forecasts ?? 0}</p><p className="mt-1 text-sm text-ink/60">Visible, never silently overwritten</p></Panel>
+        <Panel className="p-4"><p className="section-label">Unknown / excluded</p><p className="stat-number mt-2">{summary?.unknown_forecasts ?? 0}</p><p className="mt-1 text-sm text-ink/60">Outside headline calibration</p></Panel>
+      </section>
+
+      <Panel className="p-5">
+        <div className="border-b border-black/10 pb-3">
+          <p className="section-label">Four Brier views</p>
+          <h3 className="mt-1.5 font-serif text-2xl text-ink">Model, market, and your before/after decisions</h3>
+        </div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div><p className="section-label">Model · all scored</p><p className="mt-2 text-2xl font-semibold text-ink">{formatBrier(summary?.avg_model_brier)}</p><p className="mt-1 text-xs text-ink/50">{summary?.scored_runs ?? 0} forecast(s)</p></div>
+          <div><p className="section-label">Market · head-to-head</p><p className="mt-2 text-2xl font-semibold text-ink">{formatBrier(summary?.head_to_head_market_brier)}</p><p className="mt-1 text-xs text-ink/50">{summary?.head_to_head_runs ?? 0} comparable</p></div>
+          <div><p className="section-label">You · before research</p><p className="mt-2 text-2xl font-semibold text-ink">{formatBrier(summary?.avg_user_before_brier)}</p><p className="mt-1 text-xs text-ink/50">{summary?.user_before_runs ?? 0} journaled</p></div>
+          <div><p className="section-label">You · after research</p><p className="mt-2 text-2xl font-semibold text-ink">{formatBrier(summary?.avg_user_after_brier)}</p><p className="mt-1 text-xs text-ink/50">{summary?.user_after_runs ?? 0} journaled</p></div>
+        </div>
+      </Panel>
+
       {hasLoaded && unlinkedRuns > 0 ? (
         <Panel className="flex flex-wrap items-center justify-between gap-3 p-4">
           <p className="max-w-3xl text-sm leading-6 text-ink/60">
@@ -336,7 +356,7 @@ export function ScoreboardClient() {
                           {row.title}
                         </Link>
                         <p className="mt-0.5 text-xs text-ink/50">
-                          {formatLabel(row.template)} · {formatLabel(row.recommendation_label)}
+                          {formatLabel(row.template)} · {formatLabel(row.recommendation_label)}{row.is_repeat ? " · repeat" : ""}
                         </p>
                       </td>
                       <td className="text-ink/70">{formatProbability(row.p_hat)}</td>
@@ -394,10 +414,12 @@ export function ScoreboardClient() {
                   <p className="font-semibold text-ink">{row.title}</p>
                   <p className="mt-0.5 text-xs text-ink/50">
                     {formatLabel(row.recommendation_label)}
+                    {row.is_repeat ? " · repeat" : ""}
                     {row.market_expiry_at
                       ? ` · closes ${new Date(row.market_expiry_at).toLocaleDateString()}`
                       : ""}
                   </p>
+                  {row.expired_unresolved ? <Badge variant="warning">expired · unresolved</Badge> : null}
                 </div>
                 <p className="text-sm font-semibold text-ink/70">
                   model {formatProbability(row.p_hat)}

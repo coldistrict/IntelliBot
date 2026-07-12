@@ -2,32 +2,39 @@ from app.models.analysis import (
     AnalysisRequest,
     AnalysisRun,
     Document,
+    ExecutionEvent,
     FactClaim,
     Factor,
     Passage,
+    PublishedForecast,
     Recommendation,
     Review,
     RuleParse,
     SocialIntelSummary,
     Snapshot,
     Source,
+    JournalEvent,
 )
 from app.models.cache import ModelResponseCache
-from app.models.market import Market
+from app.models.market import Market, MarketPricePoint
 
 __all__ = [
     "AnalysisRequest",
     "AnalysisRun",
     "Document",
+    "ExecutionEvent",
     "FactClaim",
     "Factor",
     "Market",
+    "MarketPricePoint",
     "ModelResponseCache",
     "Passage",
+    "PublishedForecast",
     "Recommendation",
     "Review",
     "RuleParse",
     "SocialIntelSummary",
     "Snapshot",
     "Source",
+    "JournalEvent",
 ]

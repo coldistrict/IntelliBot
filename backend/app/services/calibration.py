@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from sqlalchemy import select
+from datetime import UTC, datetime
+
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import AnalysisRequest, AnalysisRun, Market
-from app.models.enums import RecommendationLabelEnum, RequestStatusEnum
+from app.models import AnalysisRun, Market, PublishedForecast
+from app.models.enums import JournalEventTypeEnum, RecommendationLabelEnum, RunQualityEnum
 from app.schemas.calibration import (
     CalibrationBucket,
     CalibrationScoreboardResponse,
@@ -24,23 +26,23 @@ MAX_TABLE_ROWS = 200
 
 def build_scoreboard(session: Session) -> CalibrationScoreboardResponse:
     rows = session.execute(
-        select(AnalysisRun, Market)
-        .join(AnalysisRequest, AnalysisRun.request_id == AnalysisRequest.id)
-        .outerjoin(Market, AnalysisRun.market_id == Market.id)
-        .where(AnalysisRequest.status == RequestStatusEnum.COMPLETE)
-        .order_by(AnalysisRun.id.desc())
+        select(PublishedForecast, AnalysisRun, Market)
+        .join(AnalysisRun, PublishedForecast.analysis_run_id == AnalysisRun.id)
+        .outerjoin(Market, PublishedForecast.market_id == Market.id)
+        .where(PublishedForecast.quality_state.in_([RunQualityEnum.CLEAN, RunQualityEnum.WARNING]))
+        .order_by(PublishedForecast.id.desc())
     ).all()
 
     resolved_rows: list[ResolvedRunRow] = []
     pending_rows: list[PendingRunRow] = []
     unlinked_runs = 0
 
-    for run, market in rows:
+    for forecast, run, market in rows:
         if market is None:
             unlinked_runs += 1
             continue
         if market.resolved_outcome in {"yes", "no"}:
-            resolved_rows.append(_resolved_row(run, market))
+            resolved_rows.append(_resolved_row(forecast, run, market))
         else:
             pending_rows.append(
                 PendingRunRow(
@@ -50,10 +52,32 @@ def build_scoreboard(session: Session) -> CalibrationScoreboardResponse:
                     p_hat=run.p_hat,
                     recommendation_label=run.recommendation_label,
                     market_expiry_at=market.expiry_at,
+                    is_repeat=forecast.is_repeat,
+                    quality_state=forecast.quality_state,
+                    expired_unresolved=bool(
+                        market.expiry_at and market.expiry_at < datetime.now(UTC)
+                    ),
                 )
             )
 
-    summary = _summarize(resolved_rows, pending_runs=len(pending_rows), unlinked_runs=unlinked_runs)
+    published_count = session.scalar(select(func.count()).select_from(PublishedForecast)) or 0
+    run_count = session.scalar(select(func.count()).select_from(AnalysisRun)) or 0
+    unknown_count = (run_count - published_count) + (
+        session.scalar(
+            select(func.count()).select_from(PublishedForecast).where(
+                PublishedForecast.quality_state.in_([RunQualityEnum.UNKNOWN, RunQualityEnum.INVALID])
+            )
+        ) or 0
+    )
+    summary = _summarize(
+        resolved_rows,
+        pending_runs=len(pending_rows),
+        unlinked_runs=unlinked_runs,
+        distinct_markets=len({forecast.market_id for forecast, _, _ in rows if forecast.market_id}),
+        published_forecasts=len(rows),
+        repeated_forecasts=sum(1 for forecast, _, _ in rows if forecast.is_repeat),
+        unknown_forecasts=unknown_count,
+    )
     return CalibrationScoreboardResponse(
         summary=summary,
         buckets=_calibration_buckets(resolved_rows),
@@ -67,19 +91,23 @@ def build_scoreboard(session: Session) -> CalibrationScoreboardResponse:
     )
 
 
-def _resolved_row(run: AnalysisRun, market: Market) -> ResolvedRunRow:
+def _resolved_row(
+    forecast: PublishedForecast,
+    run: AnalysisRun,
+    market: Market,
+) -> ResolvedRunRow:
     outcome_value = 1.0 if market.resolved_outcome == "yes" else 0.0
 
-    model_brier = _round_score((run.p_hat - outcome_value) ** 2) if run.p_hat is not None else None
+    model_brier = _round_score((forecast.p_hat - outcome_value) ** 2) if forecast.p_hat is not None else None
     market_brier = (
-        _round_score((run.market_mid_prob - outcome_value) ** 2)
-        if run.market_mid_prob is not None
+        _round_score((forecast.market_mid_prob - outcome_value) ** 2)
+        if forecast.market_mid_prob is not None
         else None
     )
 
     direction_hit: bool | None = None
-    if run.p_hat is not None and run.p_hat != 0.5:
-        direction_hit = (run.p_hat > 0.5) == (outcome_value == 1.0)
+    if forecast.p_hat is not None and forecast.p_hat != 0.5:
+        direction_hit = (forecast.p_hat > 0.5) == (outcome_value == 1.0)
 
     trade_side, trade_entry_price, trade_pnl = _virtual_trade(run, outcome_value)
 
@@ -90,8 +118,8 @@ def _resolved_row(run: AnalysisRun, market: Market) -> ResolvedRunRow:
         template=run.template_selected,
         recommendation_label=run.recommendation_label,
         confidence_label=run.confidence_label,
-        p_hat=run.p_hat,
-        market_mid_prob=run.market_mid_prob,
+        p_hat=forecast.p_hat,
+        market_mid_prob=forecast.market_mid_prob,
         outcome=market.resolved_outcome or "unknown",
         resolved_at=market.resolved_at,
         model_brier=model_brier,
@@ -100,7 +128,33 @@ def _resolved_row(run: AnalysisRun, market: Market) -> ResolvedRunRow:
         trade_side=trade_side,
         trade_entry_price=trade_entry_price,
         trade_pnl=trade_pnl,
+        is_repeat=forecast.is_repeat,
+        quality_state=forecast.quality_state,
+        user_before_brier=_journal_brier(run, JournalEventTypeEnum.BEFORE, outcome_value),
+        user_after_brier=_journal_brier(run, JournalEventTypeEnum.AFTER, outcome_value),
     )
+
+
+def _journal_brier(
+    run: AnalysisRun,
+    event_type: JournalEventTypeEnum,
+    outcome_value: float,
+) -> float | None:
+    events = sorted(
+        (event for event in run.journal_events if event.event_type == event_type),
+        key=lambda event: event.created_at,
+    )
+    if not events:
+        return None
+    payload = events[-1].payload_json
+    if event_type == JournalEventTypeEnum.BEFORE:
+        probability = payload.get("prior_probability")
+    else:
+        decision = payload.get("decision")
+        probability = {"yes": 1.0, "no": 0.0}.get(decision)
+    if not isinstance(probability, (int, float)):
+        return None
+    return _round_score((float(probability) - outcome_value) ** 2)
 
 
 def _virtual_trade(
@@ -131,6 +185,10 @@ def _summarize(
     *,
     pending_runs: int,
     unlinked_runs: int,
+    distinct_markets: int = 0,
+    published_forecasts: int = 0,
+    repeated_forecasts: int = 0,
+    unknown_forecasts: int = 0,
 ) -> ScoreboardSummary:
     model_briers = [row.model_brier for row in resolved_rows if row.model_brier is not None]
     market_briers = [row.market_brier for row in resolved_rows if row.market_brier is not None]
@@ -141,6 +199,8 @@ def _summarize(
     ]
     direction_calls = [row.direction_hit for row in resolved_rows if row.direction_hit is not None]
     trades = [row for row in resolved_rows if row.trade_pnl is not None]
+    user_before_briers = [row.user_before_brier for row in resolved_rows if row.user_before_brier is not None]
+    user_after_briers = [row.user_after_brier for row in resolved_rows if row.user_after_brier is not None]
 
     model_wins = sum(1 for model, market in head_to_head if model < market)
     total_pnl = round(sum(row.trade_pnl for row in trades if row.trade_pnl is not None), 2)
@@ -162,6 +222,14 @@ def _summarize(
         trade_wins=sum(1 for row in trades if row.trade_pnl is not None and row.trade_pnl > 0),
         total_pnl=total_pnl,
         roi_per_trade=round(total_pnl / (VIRTUAL_STAKE * len(trades)), 4) if trades else None,
+        distinct_markets=distinct_markets,
+        published_forecasts=published_forecasts,
+        repeated_forecasts=repeated_forecasts,
+        unknown_forecasts=unknown_forecasts,
+        user_before_runs=len(user_before_briers),
+        avg_user_before_brier=_average(user_before_briers),
+        user_after_runs=len(user_after_briers),
+        avg_user_after_brier=_average(user_after_briers),
     )
 
 
