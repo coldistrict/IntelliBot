@@ -5,8 +5,10 @@ Include:
 - a plain-language interpretation of the market or claim
 - the strongest scored YES evidence only
 - the strongest scored NO evidence only
-- if p_hat, p_low, and p_high are present, state the current YES/NO decision read even when confidence is low
-- when no p_hat is present, explain the qualitative label and why the estimate could not be produced
+- p_hat_yes_probability is the probability that the market resolves YES; p_no_probability is its complement
+- if p_hat_yes_probability, p_low, and p_high are present, state the numeric_decision_read even when confidence is low
+- if qualitative_label conflicts with numeric_decision_read, describe it only as evidence pressure relative to the prior, not as the final decision read
+- when no p_hat_yes_probability is present, explain the qualitative label and why the estimate could not be produced
 - keep contextual / not-scored evidence separate from the directional case
 - key uncertainties
 - why the analysis could be wrong

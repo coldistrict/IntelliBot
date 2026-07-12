@@ -17,6 +17,7 @@ from app.models.enums import (
     ConsensusLabelEnum,
     NarrativePhaseEnum,
     PricedInRiskLabelEnum,
+    QualitativeLabelEnum,
     RecommendationLabelEnum,
     SourceKindEnum,
     StanceEnum,
@@ -53,6 +54,24 @@ def _factor_is_scored(factor: Factor) -> bool:
     return factor.stance in {StanceEnum.YES, StanceEnum.NO} and (factor.final_weight or 0.0) > 0
 
 
+def final_summary_matches_numeric_read(analysis_run: AnalysisRun) -> bool:
+    if analysis_run.p_hat is None or analysis_run.qualitative_label is None:
+        return True
+    if analysis_run.p_hat > 0.5:
+        return analysis_run.qualitative_label != QualitativeLabelEnum.LEANS_NO
+    if analysis_run.p_hat < 0.5:
+        return analysis_run.qualitative_label != QualitativeLabelEnum.LEANS_YES
+    return True
+
+
+def _question_text(request: AnalysisRequest, rule_parse: RuleParse | None) -> str:
+    if rule_parse is not None:
+        return rule_parse.question_text
+    if request.market is not None:
+        return request.market.title
+    return request.input_text
+
+
 def build_display_summary(
     request: AnalysisRequest,
     *,
@@ -76,7 +95,12 @@ def build_display_summary(
     if request.status.value == "running" and progress["current_note"]:
         return f"Analysis in progress. {progress['current_note']}"
 
-    if analysis_run and analysis_run.final_summary and analysis_run.final_summary.strip():
+    if (
+        analysis_run
+        and analysis_run.final_summary
+        and analysis_run.final_summary.strip()
+        and final_summary_matches_numeric_read(analysis_run)
+    ):
         return analysis_run.final_summary.strip()
 
     scored_yes_factors = [
@@ -90,10 +114,20 @@ def build_display_summary(
         if _factor_is_scored(factor) and factor.stance == StanceEnum.NO
     ][:1]
 
-    if analysis_run and recommendation is not None and analysis_run.p_hat is not None:
-        question = rule_parse.question_text if rule_parse else request.input_text
-        label = _humanize(recommendation.recommendation_label.value) or "analysis"
-        confidence = _humanize(recommendation.confidence_label.value) or "unknown"
+    if analysis_run and analysis_run.p_hat is not None:
+        question = _question_text(request, rule_parse)
+        recommendation_label = (
+            recommendation.recommendation_label
+            if recommendation is not None
+            else analysis_run.recommendation_label
+        )
+        confidence_label = (
+            recommendation.confidence_label
+            if recommendation is not None
+            else analysis_run.confidence_label
+        )
+        label = _humanize(recommendation_label.value) or "analysis"
+        confidence = _humanize(confidence_label.value) or "unknown"
         if analysis_run.p_hat > 0.5:
             decision = "YES is more likely"
         elif analysis_run.p_hat < 0.5:

@@ -37,6 +37,9 @@ class ResolvedMarketRecord:
     image: str | None = None
     featured: bool = False
     is_new: bool = False
+    closed: bool = False
+    resolved_outcome: str | None = None
+    closed_time: datetime | None = None
 
 
 class PolymarketClient:
@@ -253,6 +256,15 @@ class PolymarketClient:
             image=image,
             featured=event_featured or self._coerce_bool(payload.get("featured")),
             is_new=event_new or self._coerce_bool(payload.get("new")),
+            closed=closed,
+            resolved_outcome=self._derive_resolved_outcome(
+                closed=closed,
+                uma_resolution_status=self._coerce_string(payload.get("umaResolutionStatus")),
+                yes_price=yes_price,
+            ),
+            closed_time=self._coerce_datetime(
+                payload.get("closedTime") or payload.get("umaEndDate")
+            ),
         )
 
     @staticmethod
@@ -337,6 +349,26 @@ class PolymarketClient:
             key=lambda record: getattr(record, attribute) or float("-inf"),
             reverse=True,
         )
+
+    @staticmethod
+    def _derive_resolved_outcome(
+        *,
+        closed: bool,
+        uma_resolution_status: str | None,
+        yes_price: float | None,
+    ) -> str | None:
+        if not closed or yes_price is None:
+            return None
+        if uma_resolution_status is not None and uma_resolution_status.strip().lower() not in {
+            "resolved",
+            "",
+        }:
+            return None
+        if yes_price >= 0.99:
+            return "yes"
+        if yes_price <= 0.01:
+            return "no"
+        return None
 
     @staticmethod
     def _resolve_binary_prices(outcomes: list[str], prices: list[str]) -> tuple[float | None, float | None]:

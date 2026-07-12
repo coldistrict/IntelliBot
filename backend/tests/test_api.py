@@ -15,6 +15,7 @@ from app.models.enums import (
     ModeEnum,
     NarrativePhaseEnum,
     PricedInRiskLabelEnum,
+    QualitativeLabelEnum,
     RecommendationLabelEnum,
     RequestStatusEnum,
     SourceTierEnum,
@@ -238,6 +239,7 @@ def test_manual_analysis_links_existing_market(client, session_factory: sessionm
     assert response.status_code == 202
     payload = response.json()["request"]
     assert payload["market_id"] == market_id
+    assert payload["market_title"] == "Will the Fed cut by June 2026?"
 
     market_response = client.get("/api/markets")
     assert market_response.status_code == 200
@@ -248,6 +250,22 @@ def test_manual_analysis_links_existing_market(client, session_factory: sessionm
     detail_response = client.get(f"/api/analyses/{payload['id']}")
     assert detail_response.status_code == 200
     assert detail_response.json()["presentation"]["headline"] == "Will the Fed cut by June 2026?"
+
+    list_response = client.get("/api/analyses")
+    assert list_response.status_code == 200
+    summaries = list_response.json()["items"]
+    assert summaries[0]["market_title"] == "Will the Fed cut by June 2026?"
+
+    filtered = client.get("/api/analyses", params={"polymarket_id": "fed-cut-june-2026"})
+    assert filtered.status_code == 200
+    filtered_payload = filtered.json()
+    assert filtered_payload["total"] == 1
+    assert filtered_payload["items"][0]["market_id"] == market_id
+
+    unmatched = client.get("/api/analyses", params={"polymarket_id": "some-other-market"})
+    assert unmatched.status_code == 200
+    assert unmatched.json()["total"] == 0
+    assert unmatched.json()["items"] == []
 
 
 def test_public_market_discovery_lists_remote_polymarket_markets(client):
@@ -278,7 +296,23 @@ def test_public_market_discovery_lists_remote_polymarket_markets(client):
                     event_slug="bitcoin-100k-2026",
                     image="https://example.com/bitcoin.png",
                     featured=True,
-                )
+                ),
+                ResolvedMarketRecord(
+                    polymarket_id="bitcoin-120k-2026",
+                    title="Will Bitcoin hit $120k in 2026?",
+                    url="https://polymarket.com/event/bitcoin-120k-2026",
+                    rules_text="Resolves YES if Bitcoin trades above $120k in 2026.",
+                    description="Crypto market",
+                    yes_bid=0.21,
+                    yes_ask=0.23,
+                    no_bid=0.77,
+                    no_ask=0.79,
+                    liquidity=75000,
+                    volume_24h=12000,
+                    spread=0.02,
+                    expiry_at=None,
+                    status="active",
+                ),
             ]
 
     app.dependency_overrides[get_polymarket_client] = lambda: StubPolymarketClient()
@@ -287,7 +321,8 @@ def test_public_market_discovery_lists_remote_polymarket_markets(client):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["total"] == 1
+    assert payload["total"] == 2
+    assert payload["has_more"] is True
     assert payload["items"][0]["polymarket_id"] == "bitcoin-100k-2026"
     assert payload["items"][0]["category"] == "Crypto"
     assert payload["items"][0]["featured"] is True
@@ -885,6 +920,121 @@ def test_completed_detail_ignores_newer_incomplete_run_shell(
     assert detail_payload["latest_run"]["p_hat"] == 0.889
     assert detail_payload["latest_run"]["final_summary"] == "Completed run summary."
     assert "Completed run summary" in detail_payload["display_summary"]
+
+
+def test_detail_uses_numeric_read_when_stored_brief_conflicts(
+    client,
+    session_factory: sessionmaker[Session],
+):
+    now = datetime.now(UTC)
+    with session_factory() as session:
+        market = Market(
+            polymarket_id="resolved-yes-market",
+            title="Resolved YES market?",
+            url="https://polymarket.com/event/resolved-yes-market",
+            rules_text="Sample rules",
+            description="Sample market",
+            yes_bid=0.99,
+            yes_ask=1.0,
+            no_bid=0.0,
+            no_ask=0.01,
+            liquidity=1000,
+            volume_24h=100,
+            spread=0.01,
+            status="closed",
+        )
+        session.add(market)
+        session.commit()
+        session.refresh(market)
+
+        request = AnalysisRequest(
+            mode=ModeEnum.MANUAL,
+            input_type=InputTypeEnum.MARKET_ID,
+            input_text=market.polymarket_id,
+            input_payload={},
+            progress_json=initial_progress_payload(now),
+            market_id=market.id,
+            status=RequestStatusEnum.COMPLETE,
+            current_stage="complete",
+            started_at=now,
+            completed_at=now,
+        )
+        mark_stage_complete(request, "complete", "Analysis complete.", now=now)
+        session.add(request)
+        session.commit()
+        session.refresh(request)
+
+        rule_parse = RuleParse(
+            analysis_request_id=request.id,
+            market_id=market.id,
+            question_text=market.title,
+            event=market.title,
+            entity_names=["Example"],
+            action="resolve yes",
+            claim_family=ClaimFamilyEnum.OFFICIAL_EVENT,
+            yes_condition="YES if the event happens.",
+            no_condition="NO if the event does not happen.",
+            deadline_text=None,
+            resolution_definition="Resolves YES if the event happens.",
+            directional_scoring_policy={},
+            official_domains=[],
+            fallback_sources=[],
+            ambiguity_flags=[],
+            clarity_score=0.8,
+            resolution_risk=0.2,
+            suitable_for_auto=False,
+            template_detected=TemplateKey.OFFICIAL_EVENT,
+            created_at=now,
+        )
+        session.add(rule_parse)
+        session.commit()
+        session.refresh(rule_parse)
+
+        run = AnalysisRun(
+            request_id=request.id,
+            market_id=market.id,
+            rule_parse_id=rule_parse.id,
+            template_selected=TemplateKey.OFFICIAL_EVENT,
+            market_mid_prob=0.995,
+            yes_exec_price=1.0,
+            no_exec_price=0.01,
+            priced_in_risk_label=PricedInRiskLabelEnum.LOW,
+            numeric_estimate_available=True,
+            numeric_estimate_reason=None,
+            qualitative_label=QualitativeLabelEnum.LEANS_NO,
+            p_hat=0.9994,
+            p_low=0.85,
+            p_high=0.99,
+            confidence_label=ConfidenceLabelEnum.MEDIUM,
+            recommendation_label=RecommendationLabelEnum.NO_EDGE,
+            final_summary="The current decision read is NO, despite p_hat 0.9994.",
+            created_at=now,
+        )
+        session.add(run)
+        session.commit()
+        session.refresh(run)
+        session.add(
+            Recommendation(
+                analysis_run_id=run.id,
+                recommendation_label=RecommendationLabelEnum.NO_EDGE,
+                confidence_label=ConfidenceLabelEnum.MEDIUM,
+                edge_yes=-0.02,
+                edge_no=-0.02,
+                rationale_json={},
+                created_at=now,
+            )
+        )
+        session.commit()
+        analysis_id = request.id
+
+    detail_response = client.get(f"/api/analyses/{analysis_id}")
+
+    assert detail_response.status_code == 200
+    detail_payload = detail_response.json()
+    assert detail_payload["presentation"]["headline"] == "Resolved YES market?"
+    assert "YES is more likely" in detail_payload["display_summary"]
+    assert "decision read is NO" not in detail_payload["presentation"]["brief_sections"]["what_it_means"]
+    assert "YES is more likely" in detail_payload["presentation"]["brief_sections"]["what_it_means"]
 
 
 def test_live_social_intelligence_groups_trusted_timeline_and_supporting_social(

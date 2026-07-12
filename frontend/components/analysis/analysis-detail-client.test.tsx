@@ -577,10 +577,12 @@ describe("AnalysisDetailClient", () => {
 
     expect(screen.getByText(/most likely: no/i)).toBeInTheDocument();
     expect(screen.getByText(/model yes read/i)).toBeInTheDocument();
-    expect(screen.getByText(/model no read/i)).toBeInTheDocument();
-    expect(screen.getByText(/polymarket prior/i)).toBeInTheDocument();
+    expect(screen.getByText("NO 57%")).toBeInTheDocument();
+    expect(screen.getByText(/edge vs market/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/no linked polymarket market — this is an analysis-only read/i),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("43%").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("57%").length).toBeGreaterThan(0);
     expect(screen.queryByText("31% - 55%")).not.toBeInTheDocument();
     expect(screen.queryByText(/numeric estimate withheld/i)).not.toBeInTheDocument();
   });
@@ -772,9 +774,118 @@ describe("AnalysisDetailClient", () => {
     expect(screen.getByText(/^Probability$/i)).toBeInTheDocument();
     expect(screen.getByText(/^No estimate$/i)).toBeInTheDocument();
     expect(screen.getByText(/qualitative read: insufficient basis\./i)).toBeInTheDocument();
-    expect(screen.getByText(/why no estimate/i)).toBeInTheDocument();
     expect(screen.getByText(/there are fewer than two scored directional factors/i)).toBeInTheDocument();
+    expect(screen.getByText(/edge vs market/i)).toBeInTheDocument();
     expect(screen.queryByText(/^Analysis Only$/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the model-vs-market edge for linked-market runs", async () => {
+    vi.mocked(fetchAnalysis).mockResolvedValue({
+      request: {
+        id: 77,
+        mode: "manual",
+        input_type: "market_id",
+        input_text: "949495",
+        market_id: 4,
+        market_title: "Fed rate cut by June 2026 meeting?",
+        template_requested: null,
+        template_selected: "macro_policy",
+        status: "complete",
+        current_stage: "complete",
+        error_message: null,
+        started_at: "2026-04-06T12:00:00Z",
+        completed_at: "2026-04-06T12:01:00Z",
+        created_at: "2026-04-06T12:00:00Z",
+        updated_at: "2026-04-06T12:01:00Z",
+        latest_recommendation_label: "no_edge",
+        latest_confidence_label: "medium",
+        review_count: 0,
+        progress_percent: 100,
+        current_stage_label: "Complete",
+        current_stage_note: "Analysis complete.",
+        display_summary: "Screens at YES 58% / NO 42%.",
+        qualitative_label: "leans_yes",
+      },
+      market: {
+        title: "Fed rate cut by June 2026 meeting?",
+        url: "https://polymarket.com/event/fed-cut",
+        liquidity: 25000,
+        spread: 0.02,
+        status: "active",
+      },
+      latest_rule_parse: null,
+      latest_run: {
+        id: 90,
+        request_id: 77,
+        market_id: 4,
+        rule_parse_id: 1,
+        template_selected: "macro_policy",
+        market_mid_prob: 0.46,
+        yes_exec_price: null,
+        no_exec_price: null,
+        priced_in_risk_label: null,
+        numeric_estimate_available: true,
+        numeric_estimate_reason: null,
+        qualitative_label: "leans_yes",
+        p_hat: 0.58,
+        p_low: null,
+        p_high: null,
+        confidence_label: "medium",
+        recommendation_label: "no_edge",
+        why_wrong_summary: "Could be wrong.",
+        final_summary: "Leans toward a cut.",
+        created_at: "2026-04-06T12:01:00Z",
+      },
+      recommendation: null,
+      progress: {
+        completed_count: 5,
+        current_label: null,
+        current_note: null,
+        current_stage: "complete",
+        percent_complete: 100,
+        total_count: 5,
+        last_updated_at: null,
+      },
+      audit: null,
+      presentation: {
+        headline: "Fed rate cut by June 2026 meeting?",
+        thesis: "Leans toward a cut with medium confidence.",
+        status_note: "Analysis complete.",
+        brief_sections: {
+          what_it_means: "Leans toward a cut.",
+          why_yes: [],
+          why_no: [],
+          context: [],
+          caveats: "Could be wrong.",
+        },
+        artifact_statuses: [],
+      },
+      display_summary: "Screens at YES 58% / NO 42%.",
+      last_updated_at: null,
+      social_intel_summary: null,
+      sources: [],
+      documents: [],
+      passages: [],
+      trusted_social_sources: [],
+      fact_claims: [],
+      factors: [],
+      reviews: [],
+    } as never);
+
+    render(<AnalysisDetailClient analysisId="77" />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/edge vs market/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("+12.0 pts")).toBeInTheDocument();
+    expect(screen.getByText(/polymarket prior/i)).toBeInTheDocument();
+    expect(screen.getByText("46%")).toBeInTheDocument();
+    expect(screen.getByText("58%")).toBeInTheDocument();
+    expect(
+      screen.getByText(/the desk sees yes as more likely than the market is pricing/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/analysis-only read/i)).not.toBeInTheDocument();
   });
 
   it("renders running-state placeholders inside the memo layout", async () => {

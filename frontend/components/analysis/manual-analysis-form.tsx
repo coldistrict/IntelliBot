@@ -113,9 +113,9 @@ export function ManualAnalysisForm() {
     <div className="space-y-6">
       <section className="max-w-5xl space-y-4">
         <p className="eyebrow">Manual Analysis</p>
-        <h2 className="page-title">
+        <h1 className="page-title">
           Compose the research run, then let the memo build itself.
-        </h2>
+        </h1>
         <p className="page-intro">
           Start with one clear claim, URL, or market ID. The desk will parse the proposition,
           gather sources, verify evidence, and open a live memo page while the run is still
@@ -125,7 +125,7 @@ export function ManualAnalysisForm() {
 
       <Panel className="overflow-hidden p-0">
         <form className="space-y-0" onSubmit={handleSubmit}>
-          <section className="space-y-5 border-b border-black/8 p-5 md:p-6">
+          <section className="space-y-5 border-b border-black/10 p-5 md:p-6">
             <div className="flex flex-wrap gap-2">
               <Badge variant="yes">Memo-first workflow</Badge>
               <Badge variant="muted">Live X intelligence available</Badge>
@@ -134,7 +134,7 @@ export function ManualAnalysisForm() {
 
             <fieldset>
               <legend className="text-sm font-semibold text-ink">Input type</legend>
-              <div className="mt-2 grid gap-2 rounded-lg border border-black/10 bg-white/45 p-1 sm:grid-cols-3">
+              <div className="mt-2 grid gap-2 rounded-lg border border-black/10 bg-white/50 p-1 sm:grid-cols-3">
                 {inputModeOptions.map(({ value, label }) => (
                   <button
                     key={value}
@@ -144,7 +144,7 @@ export function ManualAnalysisForm() {
                     className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
                       inputMode === value
                         ? "bg-ink text-white shadow-sm"
-                        : "text-ink/62 hover:bg-white/80 hover:text-ink"
+                        : "text-ink/60 hover:bg-white/80 hover:text-ink"
                     }`}
                   >
                     {label}
@@ -169,7 +169,7 @@ export function ManualAnalysisForm() {
                       : "https://polymarket.com/event/fed-cut-june-2026"
                 }
               />
-              <div className="mt-2 flex flex-col gap-1 text-sm leading-6 text-ink/58 sm:flex-row sm:items-center sm:justify-between">
+              <div className="mt-2 flex flex-col gap-1 text-sm leading-6 text-ink/60 sm:flex-row sm:items-center sm:justify-between">
                 <p>{helperText}</p>
                 <p className="text-xs uppercase tracking-[0.14em] text-ink/40">{primaryValue.trim().length} chars</p>
               </div>
@@ -193,12 +193,35 @@ export function ManualAnalysisForm() {
             </label>
           </section>
 
+          <div className="mx-5 my-5 flex flex-col gap-3 rounded-lg border border-black/10 bg-white/95 px-4 py-4 shadow-panel backdrop-blur-sm md:mx-6 md:flex-row md:items-center md:justify-between">
+            <p className="text-sm leading-7 text-ink/60">
+              The composer is intentionally compact. Most of the product value should happen on
+              the live analysis page, not here.
+            </p>
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="primary-action md:min-w-44"
+            >
+              {isSubmitting ? "Starting analysis..." : "Run manual analysis"}
+            </button>
+          </div>
+
+          {error ? (
+            <div
+              role="alert"
+              className="mx-5 -mt-2 mb-5 rounded-lg border border-ember/20 bg-ember/10 px-5 py-4 text-sm leading-7 text-ember md:mx-6"
+            >
+              {error}
+            </div>
+          ) : null}
+
           <section className="space-y-4 p-5 md:p-6">
             <div className="flex flex-wrap items-center gap-3">
               <p className="section-label">
                 Analysis settings
               </p>
-              <span className="text-sm text-ink/54">Keep this compact unless the claim needs extra framing.</span>
+              <span className="text-sm text-ink/60">Keep this compact unless the claim needs extra framing.</span>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
@@ -240,7 +263,7 @@ export function ManualAnalysisForm() {
                 />
                 <div className="ml-3">
                   <p className="text-sm font-semibold text-ink">Include live X intelligence</p>
-                  <p className="mt-1 text-xs leading-6 text-ink/56">
+                  <p className="mt-1 text-xs leading-6 text-ink/60">
                     Grok searches live X and web context for trusted accounts and narrative shifts.
                   </p>
                 </div>
@@ -255,7 +278,7 @@ export function ManualAnalysisForm() {
                 />
                 <div className="ml-3">
                   <p className="text-sm font-semibold text-ink">Enable premium retrieval</p>
-                  <p className="mt-1 text-xs leading-6 text-ink/56">
+                  <p className="mt-1 text-xs leading-6 text-ink/60">
                     Allow paywalled premium-news search results into the source set when they are relevant.
                   </p>
                 </div>
@@ -263,44 +286,32 @@ export function ManualAnalysisForm() {
             </div>
           </section>
 
-          {error ? (
-            <div className="mx-5 rounded-lg border border-ember/20 bg-ember/10 px-5 py-4 text-sm leading-7 text-ember md:mx-6">
-              {error}
-            </div>
-          ) : null}
-
-          <section className="memo-rule space-y-5 p-5 md:p-6">
-            <div className="grid gap-5 lg:grid-cols-2">
-              <div>
-                <p className="text-sm font-semibold text-ink">What happens next</p>
-                <p className="mt-2 text-sm leading-7 text-ink/62">
-                  You’ll land on a live memo page that keeps the structure visible while the run is
-                  still working. Rules, sources, factors, and the audit inspector unlock as soon as
-                  each artifact is ready.
-                </p>
+          <section className="memo-rule p-5 md:p-6">
+            <details className="group">
+              <summary className="cursor-pointer list-none text-sm font-semibold text-ink/70 transition hover:text-ink">
+                <span aria-hidden="true" className="mr-2 inline-block transition group-open:rotate-90">
+                  ›
+                </span>
+                What happens next & tips for stronger inputs
+              </summary>
+              <div className="mt-4 grid gap-5 lg:grid-cols-2">
+                <div>
+                  <p className="text-sm font-semibold text-ink">What happens next</p>
+                  <p className="mt-2 text-sm leading-7 text-ink/60">
+                    You’ll land on a live memo page that keeps the structure visible while the run
+                    is still working. Rules, sources, factors, and the audit inspector unlock as
+                    soon as each artifact is ready.
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-ink">Tips for stronger inputs</p>
+                  <p className="mt-2 text-sm leading-7 text-ink/60">
+                    Use a direct claim, add a deadline if it matters, and let Grok handle live X
+                    discovery instead of hand-curating posts.
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-semibold text-ink">Tips for stronger inputs</p>
-                <p className="mt-2 text-sm leading-7 text-ink/62">
-                  Use a direct claim, add a deadline if it matters, and let Grok handle live X
-                  discovery instead of hand-curating posts.
-                </p>
-              </div>
-            </div>
-
-            <div className="sticky bottom-4 flex flex-col gap-3 rounded-lg border border-black/10 bg-white/95 px-4 py-4 shadow-panel backdrop-blur-sm md:flex-row md:items-center md:justify-between">
-              <p className="text-sm leading-7 text-ink/62">
-                The composer is intentionally compact. Most of the product value should happen on
-                the live analysis page, not here.
-              </p>
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className="primary-action md:min-w-44"
-              >
-                {isSubmitting ? "Starting analysis..." : "Run manual analysis"}
-              </button>
-            </div>
+            </details>
           </section>
         </form>
       </Panel>

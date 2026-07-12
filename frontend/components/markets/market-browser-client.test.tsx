@@ -4,7 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MarketBrowserClient } from "@/components/markets/market-browser-client";
 import { MarketDetailClient } from "@/components/markets/market-detail-client";
-import { createManualAnalysis, fetchPublicMarket, fetchPublicMarkets } from "@/lib/api";
+import {
+  createManualAnalysis,
+  fetchAnalyses,
+  fetchPublicMarket,
+  fetchPublicMarkets,
+} from "@/lib/api";
 
 const push = vi.fn();
 
@@ -31,6 +36,7 @@ vi.mock("@/lib/api", async () => {
   return {
     ...actual,
     createManualAnalysis: vi.fn(),
+    fetchAnalyses: vi.fn(),
     fetchPublicMarket: vi.fn(),
     fetchPublicMarkets: vi.fn(),
   };
@@ -74,7 +80,7 @@ const market = {
 describe("MarketBrowserClient", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(fetchPublicMarkets).mockResolvedValue({ items: [market], total: 1 });
+    vi.mocked(fetchPublicMarkets).mockResolvedValue({ items: [market], total: 1, has_more: false });
     vi.mocked(fetchPublicMarket).mockResolvedValue(market);
     vi.mocked(createManualAnalysis).mockResolvedValue({
       request: {
@@ -170,6 +176,7 @@ describe("MarketBrowserClient", () => {
         },
       ],
       total: 1,
+      has_more: false,
     });
 
     render(<MarketBrowserClient />);
@@ -207,6 +214,7 @@ describe("MarketBrowserClient", () => {
         },
       ],
       total: 1,
+      has_more: false,
     });
 
     render(<MarketBrowserClient />);
@@ -221,12 +229,65 @@ describe("MarketBrowserClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Research edge only" }));
     expect(screen.getByText("1 matching of 1 loaded")).toBeInTheDocument();
   });
+
+  it("shows a retryable error state, never the empty-state copy, when loading fails", async () => {
+    vi.mocked(fetchPublicMarkets)
+      .mockRejectedValueOnce(new Error("Failed to fetch"))
+      .mockResolvedValueOnce({ items: [market], total: 1, has_more: false });
+
+    render(<MarketBrowserClient />);
+
+    expect(await screen.findByText("Markets cannot be loaded")).toBeInTheDocument();
+    expect(screen.getByText("Failed to fetch")).toBeInTheDocument();
+    expect(screen.getByText("Market list unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("No markets matched this view.")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByText("Will the Fed cut rates by June 2026?")).toBeInTheDocument();
+    expect(screen.queryByText("Markets cannot be loaded")).not.toBeInTheDocument();
+  });
+
+  it("shows the empty state, not an error, when the view has no matches", async () => {
+    vi.mocked(fetchPublicMarkets).mockResolvedValue({ items: [], total: 0, has_more: false });
+
+    render(<MarketBrowserClient />);
+
+    expect(await screen.findByText("No markets matched this view.")).toBeInTheDocument();
+    expect(screen.queryByText("Markets cannot be loaded")).not.toBeInTheDocument();
+  });
+
+  it("loads more markets with the next offset and appends results", async () => {
+    const secondMarket = { ...market, polymarket_id: "btc-100k", title: "Bitcoin above 100k?" };
+    vi.mocked(fetchPublicMarkets)
+      .mockResolvedValueOnce({ items: [market], total: 2, has_more: true })
+      .mockResolvedValueOnce({ items: [secondMarket], total: 2, has_more: false });
+
+    render(<MarketBrowserClient />);
+
+    await screen.findByText("Will the Fed cut rates by June 2026?");
+    expect(screen.getByText("1+ markets loaded")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load more (1 loaded)" }));
+
+    await waitFor(() => {
+      expect(fetchPublicMarkets).toHaveBeenLastCalledWith({
+        q: undefined,
+        view: "popular",
+        limit: 70,
+        offset: 1,
+      });
+    });
+    expect(await screen.findByText("Bitcoin above 100k?")).toBeInTheDocument();
+    expect(screen.getByText("Will the Fed cut rates by June 2026?")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /load more/i })).not.toBeInTheDocument();
+  });
 });
 
 describe("MarketDetailClient", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(fetchPublicMarket).mockResolvedValue(market);
+    vi.mocked(fetchAnalyses).mockResolvedValue({ items: [], total: 0 });
     vi.mocked(createManualAnalysis).mockResolvedValue({
       request: {
         id: 101,
@@ -313,5 +374,57 @@ describe("MarketDetailClient", () => {
     expect(await screen.findByText("NO has verified edge")).toBeInTheDocument();
     expect(screen.getByText("Edge after buffer")).toBeInTheDocument();
     expect(screen.getByText("+6%")).toBeInTheDocument();
+  });
+
+  it("links prior analyses of the same market and hides the section when none exist", async () => {
+    vi.mocked(fetchAnalyses).mockResolvedValue({
+      items: [
+        {
+          id: 42,
+          mode: "manual",
+          input_type: "market_id",
+          input_text: "fed-cut-june-2026",
+          market_id: 4,
+          market_title: market.title,
+          template_requested: null,
+          template_selected: "macro_policy",
+          status: "complete",
+          current_stage: "complete",
+          error_message: null,
+          started_at: "2026-06-10T04:59:04Z",
+          completed_at: "2026-06-10T05:00:42Z",
+          created_at: "2026-06-10T04:59:04Z",
+          updated_at: "2026-06-10T05:00:42Z",
+          latest_recommendation_label: "no_edge",
+          latest_confidence_label: "low",
+          review_count: 0,
+          progress_percent: 100,
+          current_stage_label: "Complete",
+          current_stage_note: "Done.",
+          display_summary: "Done.",
+          qualitative_label: "leans_no",
+        },
+      ],
+      total: 1,
+    });
+
+    render(<MarketDetailClient polymarketId="fed-cut-june-2026" />);
+
+    expect(await screen.findByText("Already analyzed")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchAnalyses).toHaveBeenCalledWith({
+        polymarket_id: "fed-cut-june-2026",
+        limit: 5,
+      });
+    });
+    const priorLink = screen.getByText("complete").closest("a");
+    expect(priorLink).toHaveAttribute("href", "/analyses/42");
+  });
+
+  it("omits the prior-analysis section when the market has never been analyzed", async () => {
+    render(<MarketDetailClient polymarketId="fed-cut-june-2026" />);
+
+    await screen.findByRole("heading", { name: market.title });
+    expect(screen.queryByText("Already analyzed")).not.toBeInTheDocument();
   });
 });

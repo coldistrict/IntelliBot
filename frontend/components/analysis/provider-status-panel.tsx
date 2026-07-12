@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { ProviderStatus, fetchProviderStatus } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { DataState } from "@/components/ui/data-state";
 import { Panel } from "@/components/ui/panel";
 
 const rows: Array<{
@@ -48,35 +49,42 @@ export function ProviderStatusPanel() {
   const [status, setStatus] = useState<ProviderStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const payload = await fetchProviderStatus();
-        setStatus(payload);
-        setError(null);
-      } catch (loadError) {
-        setError(
-          loadError instanceof Error ? loadError.message : "Unable to load provider status.",
-        );
-      }
+  const load = useCallback(async () => {
+    try {
+      const payload = await fetchProviderStatus();
+      setStatus(payload);
+      setError(null);
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error ? loadError.message : "Unable to load provider status.",
+      );
     }
-
-    void load();
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   return (
     <Panel className="p-5">
-      <div className="border-b border-black/8 pb-3">
+      <div className="border-b border-black/10 pb-3">
         <p className="section-label">Provider readiness</p>
         <h3 className="mt-1.5 font-serif text-2xl text-ink">What the desk can use right now</h3>
       </div>
-      {error ? <p className="mt-4 text-sm text-ember">{error}</p> : null}
-      {status ? (
+      {error ? (
+        <DataState
+          variant="error"
+          title="Provider status unavailable"
+          note={error}
+          onRetry={() => void load()}
+          className="mt-4"
+        />
+      ) : status ? (
         <div className="mt-2">
           {rows.map((row) => (
             <div
               key={row.key}
-              className="grid gap-3 border-b border-black/8 py-4 last:border-b-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_11rem]"
+              className="grid gap-3 border-b border-black/10 py-4 last:border-b-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_11rem]"
             >
               <div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -85,16 +93,16 @@ export function ProviderStatusPanel() {
                     {status[row.key] ? "ready" : "missing"}
                   </Badge>
                 </div>
-                <p className="mt-1 text-sm leading-6 text-ink/62">{row.note}</p>
+                <p className="mt-1 text-sm leading-6 text-ink/60">{row.note}</p>
               </div>
-              <div className="text-sm leading-6 text-ink/56 md:text-right">
+              <div className="text-sm leading-6 text-ink/60 md:text-right">
                 {status[row.key] ? "No action needed." : row.nextStep}
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <p className="mt-4 text-sm text-ink/55">Loading provider readiness…</p>
+        <DataState variant="loading" note="Loading provider readiness…" className="mt-2" />
       )}
     </Panel>
   );

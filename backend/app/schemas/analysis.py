@@ -413,6 +413,7 @@ class AnalysisRequestSummary(ORMModel):
     input_type: InputTypeEnum
     input_text: str
     market_id: int | None
+    market_title: str | None = None
     template_requested: TemplateKey | None
     template_selected: TemplateKey | None
     status: RequestStatusEnum

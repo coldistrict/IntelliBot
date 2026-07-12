@@ -14,12 +14,19 @@ const config: Config = {
         ember: "#ad4b34",
         pine: "#146052",
         mist: "#dfe7e1",
+        amber: {
+          DEFAULT: "#b9892e",
+          soft: "#f0d18a",
+          deep: "#6a4c0a",
+        },
       },
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        serif: ["var(--font-serif)", "ui-serif", "Georgia", "serif"],
       },
       boxShadow: {
-        panel: "0 10px 28px rgba(21, 29, 26, 0.07)",
+        panel: "0 1px 2px rgba(21, 29, 26, 0.04), 0 8px 24px rgba(21, 29, 26, 0.05)",
+        lift: "0 2px 4px rgba(21, 29, 26, 0.06), 0 12px 32px rgba(21, 29, 26, 0.09)",
       },
     },
   },

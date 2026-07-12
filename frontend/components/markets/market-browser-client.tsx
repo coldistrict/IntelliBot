@@ -10,6 +10,7 @@ import {
   PublicMarket,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { DataState } from "@/components/ui/data-state";
 import { Panel } from "@/components/ui/panel";
 import {
   formatCurrency,
@@ -30,6 +31,8 @@ import { ResearchEdgeSignalCard } from "@/components/markets/research-edge-signa
 type MarketView = "popular" | "trending" | "liquidity" | "closing_soon" | "newest";
 type SignalFilter = "all" | "higher_chance" | "research_edge";
 const MARKET_SCAN_SIZE = 70;
+
+const PAGE_SIZE = MARKET_SCAN_SIZE;
 
 const viewOptions: Array<{ value: MarketView; label: string }> = [
   { value: "popular", label: "Popular" },
@@ -84,19 +87,19 @@ function MarketRow({
           {market.title}
         </Link>
         {market.event_title ? (
-          <p className="mt-1 text-sm leading-6 text-ink/58">{market.event_title}</p>
+          <p className="mt-1 text-sm leading-6 text-ink/60">{market.event_title}</p>
         ) : null}
-        <div className="mt-3 grid gap-2 text-sm text-ink/58 sm:grid-cols-3">
+        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-ink/60">
           <p>
-            <span className="font-semibold text-ink">Liquidity:</span>{" "}
-            {formatCurrency(market.liquidity)}
+            <span className="font-medium text-ink/80">Liquidity</span>{" "}
+            <span className="tabular-nums">{formatCurrency(market.liquidity)}</span>
           </p>
           <p>
-            <span className="font-semibold text-ink">24h:</span>{" "}
-            {formatCurrency(market.volume_24h)}
+            <span className="font-medium text-ink/80">24h volume</span>{" "}
+            <span className="tabular-nums">{formatCurrency(market.volume_24h)}</span>
           </p>
           <p>
-            <span className="font-semibold text-ink">Ends:</span> {formatDate(market.expiry_at)}
+            <span className="font-medium text-ink/80">Ends</span> {formatDate(market.expiry_at)}
           </p>
         </div>
       </div>
@@ -105,13 +108,13 @@ function MarketRow({
         <HighChanceReturnCard result={returnResult} settings={returnSettings} compact />
         <ResearchEdgeSignalCard signal={market.research_edge_signal} compact />
         <div className="grid gap-2 grid-cols-[1fr_1fr_auto]">
-          <div className="rounded-lg border border-black/10 bg-white/70 p-3">
-            <p className="section-label">YES</p>
-            <p className="mt-1 text-lg font-semibold text-ink">{formatPercent(yesMidpoint)}</p>
+          <div className="rounded-lg border border-pine/20 bg-pine/5 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-pine/80">YES</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums text-pine">{formatPercent(yesMidpoint)}</p>
           </div>
-          <div className="rounded-lg border border-black/10 bg-white/70 p-3">
-            <p className="section-label">NO</p>
-            <p className="mt-1 text-lg font-semibold text-ink">{formatPercent(noMidpoint)}</p>
+          <div className="rounded-lg border border-ember/20 bg-ember/5 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ember/80">NO</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums text-ember">{formatPercent(noMidpoint)}</p>
           </div>
           <button
             type="button"
@@ -139,8 +142,11 @@ export function MarketBrowserClient() {
   const [queryInput, setQueryInput] = useState("");
   const [activeQuery, setActiveQuery] = useState("");
   const [markets, setMarkets] = useState<PublicMarket[]>([]);
+  const [hasMore, setHasMore] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [signalFilter, setSignalFilter] = useState<SignalFilter>("all");
   const [stake, setStake] = useState(DEFAULT_RETURN_SETTINGS.stake);
@@ -148,26 +154,29 @@ export function MarketBrowserClient() {
     DEFAULT_RETURN_SETTINGS.minimumProbability * 100,
   );
   const [minimumProfit, setMinimumProfit] = useState(DEFAULT_RETURN_SETTINGS.minimumProfit);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
-    setError(null);
+    setLoadError(null);
 
     fetchPublicMarkets({
       q: activeQuery || undefined,
       view,
-      limit: MARKET_SCAN_SIZE,
+      limit: PAGE_SIZE,
     })
       .then((payload) => {
         if (!cancelled) {
           setMarkets(payload.items);
+          setHasMore(payload.has_more);
         }
       })
-      .catch((loadError) => {
+      .catch((fetchError) => {
         if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : "Could not load markets.");
+          setLoadError(fetchError instanceof Error ? fetchError.message : "Could not load markets.");
           setMarkets([]);
+          setHasMore(false);
         }
       })
       .finally(() => {
@@ -179,7 +188,7 @@ export function MarketBrowserClient() {
     return () => {
       cancelled = true;
     };
-  }, [activeQuery, view]);
+  }, [activeQuery, view, reloadKey]);
 
   const pageTitle = useMemo(
     () => (activeQuery ? `Search: ${activeQuery}` : viewOptions.find((item) => item.value === view)?.label ?? "Markets"),
@@ -229,9 +238,30 @@ export function MarketBrowserClient() {
   );
   const needsAnalysisCount = markets.length - checkedCount;
 
+  async function handleLoadMore() {
+    setIsLoadingMore(true);
+    setLoadError(null);
+    try {
+      const payload = await fetchPublicMarkets({
+        q: activeQuery || undefined,
+        view,
+        limit: PAGE_SIZE,
+        offset: markets.length,
+      });
+      setMarkets((current) => [...current, ...payload.items]);
+      setHasMore(payload.has_more);
+    } catch (fetchError) {
+      setLoadError(
+        fetchError instanceof Error ? fetchError.message : "Could not load more markets.",
+      );
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
+
   async function handleAnalyze(market: PublicMarket) {
     setAnalyzingId(market.polymarket_id);
-    setError(null);
+    setActionError(null);
     try {
       const result = await createManualAnalysis({
         include_premium: false,
@@ -239,7 +269,7 @@ export function MarketBrowserClient() {
       });
       router.push(`/analyses/${result.request.id}`);
     } catch (analysisError) {
-      setError(
+      setActionError(
         analysisError instanceof Error
           ? analysisError.message
           : "Could not start analysis for this market.",
@@ -258,7 +288,7 @@ export function MarketBrowserClient() {
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="space-y-4">
           <p className="eyebrow">Market Browser</p>
-          <h2 className="page-title">Find the markets where the numbers favor you.</h2>
+          <h1 className="page-title">Find the markets where the numbers favor you.</h1>
           <p className="page-intro">
             Review 70 live markets for higher-chance returns now, then use the research desk to
             separate popular odds from evidence-backed price edge.
@@ -270,9 +300,11 @@ export function MarketBrowserClient() {
           <p className="text-sm leading-6 text-ink/58">
             {isLoading
               ? "Loading markets"
-              : signalFilter !== "all"
-                ? `${displayedMarkets.length} matching of ${markets.length} loaded`
-                : `${markets.length} markets loaded`}
+              : loadError && markets.length === 0
+                ? "Market list unavailable"
+                : signalFilter !== "all"
+                  ? `${displayedMarkets.length} matching of ${markets.length} loaded`
+                  : `${markets.length}${hasMore ? "+" : ""} markets loaded`}
           </p>
         </Panel>
       </section>
@@ -376,7 +408,7 @@ export function MarketBrowserClient() {
             />
           </label>
           <div className="flex items-end gap-2">
-            <button type="submit" className="primary-action h-[3.05rem]">
+            <button type="submit" className="primary-action h-12">
               Search
             </button>
             {activeQuery ? (
@@ -386,14 +418,14 @@ export function MarketBrowserClient() {
                   setQueryInput("");
                   setActiveQuery("");
                 }}
-                className="secondary-action h-[3.05rem]"
+                className="secondary-action h-12"
               >
                 Clear
               </button>
             ) : null}
           </div>
         </form>
-        <div className="flex flex-wrap gap-2">
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
           {viewOptions.map((option) => (
             <button
               key={option.value}
@@ -404,10 +436,8 @@ export function MarketBrowserClient() {
                 setActiveQuery("");
                 setView(option.value);
               }}
-              className={`rounded-md border px-3 py-2 text-sm font-semibold transition ${
-                !activeQuery && view === option.value
-                  ? "border-ink bg-ink text-white"
-                  : "border-black/10 bg-white/65 text-ink/64 hover:bg-white hover:text-ink"
+              className={`filter-chip shrink-0 whitespace-nowrap ${
+                !activeQuery && view === option.value ? "filter-chip-active" : "filter-chip-idle"
               }`}
             >
               {option.label}
@@ -459,14 +489,12 @@ export function MarketBrowserClient() {
         </div>
       </div>
 
-      {error ? (
-        <div className="rounded-lg border border-ember/20 bg-ember/10 px-5 py-4 text-sm leading-7 text-ember">
-          {error}
-        </div>
+      {actionError ? (
+        <DataState variant="error" title="Could not start the analysis" note={actionError} />
       ) : null}
 
       <Panel className="p-5">
-        <div className="border-b border-black/8 pb-3">
+        <div className="border-b border-black/10 pb-3">
           <p className="section-label">{activeQuery ? "Search results" : pageTitle}</p>
           <h3 className="mt-1.5 font-serif text-2xl text-ink">Live markets</h3>
         </div>
@@ -476,8 +504,25 @@ export function MarketBrowserClient() {
             <div className="h-16 rounded-lg bg-black/5" />
             <div className="h-16 rounded-lg bg-black/5" />
           </div>
+        ) : loadError && markets.length === 0 ? (
+          <DataState
+            variant="error"
+            title="Markets cannot be loaded"
+            note={loadError}
+            onRetry={() => setReloadKey((key) => key + 1)}
+            className="mt-4"
+          />
         ) : displayedMarkets.length ? (
           <div>
+            {loadError ? (
+              <DataState
+                variant="error"
+                title="Loading more markets failed"
+                note={loadError}
+                onRetry={() => void handleLoadMore()}
+                className="mt-4"
+              />
+            ) : null}
             {displayedMarkets.map((market) => (
               <MarketRow
                 key={market.polymarket_id}
@@ -489,15 +534,30 @@ export function MarketBrowserClient() {
                 returnSettings={returnSettings}
               />
             ))}
+            {hasMore ? (
+              <div className="border-t border-black/10 pt-4">
+                <button
+                  type="button"
+                  onClick={handleLoadMore}
+                  disabled={isLoadingMore}
+                  className="secondary-action"
+                >
+                  {isLoadingMore ? "Loading more..." : `Load more (${markets.length} loaded)`}
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : (
-          <div className="py-6 text-sm leading-7 text-ink/58">
-            {signalFilter === "higher_chance" && markets.length
-              ? "No loaded market currently clears your chance and profit settings."
-              : signalFilter === "research_edge" && markets.length
-                ? "No loaded market currently has verified research edge. Run or refresh analysis to check one."
-              : "No markets matched this view."}
-          </div>
+          <DataState
+            variant="empty"
+            note={
+              signalFilter === "higher_chance" && markets.length
+                ? "No loaded market currently clears your chance and profit settings."
+                : signalFilter === "research_edge" && markets.length
+                  ? "No loaded market currently has verified research edge. Run or refresh analysis to check one."
+                  : "No markets matched this view."
+            }
+          />
         )}
       </Panel>
     </div>
