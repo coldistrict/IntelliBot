@@ -79,3 +79,15 @@ docker compose down
 - Backend settings load it with `pydantic-settings`.
 - `.env` is gitignored; only `.env.example` should be committed.
 - Model/base URL settings are env-configurable so you can swap providers or models without code edits.
+
+### Optional billing dashboard
+
+The Settings page can also monitor provider spending. Billing credentials are separate from the
+inference keys and are read only by the backend:
+
+- `OPENAI_ADMIN_API_KEY` enables current-month organization costs.
+- `OPENAI_MONTHLY_BUDGET_USD` turns those costs into a clearly labeled remaining-budget estimate.
+- `XAI_MANAGEMENT_API_KEY` and `XAI_TEAM_ID` enable the exact xAI prepaid-credit balance.
+
+Restart the backend after changing these values. The UI caches billing results for five minutes and
+also provides a manual refresh control.

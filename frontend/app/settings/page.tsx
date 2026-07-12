@@ -1,4 +1,5 @@
 import { ProviderStatusPanel } from "@/components/analysis/provider-status-panel";
+import { ProviderBillingPanel } from "@/components/settings/provider-billing-panel";
 import { Panel } from "@/components/ui/panel";
 
 export default function SettingsPage() {
@@ -14,6 +15,8 @@ export default function SettingsPage() {
           should never block the rest of the workflow.
         </p>
       </section>
+
+      <ProviderBillingPanel />
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <ProviderStatusPanel />

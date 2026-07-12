@@ -8,12 +8,14 @@ import {
   Passage,
   PresentationArtifactStatus,
   PresentationEvidenceItem,
+  ResearchEdgeSignal,
   Source,
 } from "@/lib/api";
 import { AnalysisAuditDrawer } from "@/components/analysis/analysis-audit-drawer";
 import { useAnalysisDetail } from "@/components/analysis/use-analysis-detail";
 import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/ui/panel";
+import { ResearchEdgeSignalCard } from "@/components/markets/research-edge-signal";
 
 type AnalysisDetailClientProps = {
   analysisId: string;
@@ -435,6 +437,64 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
         ? "The model could not form a directional read from the available evidence yet."
         : "No linked Polymarket market was available, and the available evidence did not form a directional read yet."
     : null;
+  const signalSide =
+    recommendationLabel === "lean_yes"
+      ? "yes"
+      : recommendationLabel === "lean_no"
+        ? "no"
+        : null;
+  const signalConservativeProbability =
+    signalSide === "yes"
+      ? detail.latest_run?.p_low ?? null
+      : signalSide === "no" && detail.latest_run?.p_high !== null && detail.latest_run?.p_high !== undefined
+        ? 1 - detail.latest_run.p_high
+        : null;
+  const signalWinProbability =
+    signalSide === "yes"
+      ? detail.latest_run?.p_hat ?? null
+      : signalSide === "no" && detail.latest_run?.p_hat !== null && detail.latest_run?.p_hat !== undefined
+        ? 1 - detail.latest_run.p_hat
+        : null;
+  const signalPrice =
+    signalSide === "yes"
+      ? detail.latest_run?.yes_exec_price ?? null
+      : signalSide === "no"
+        ? detail.latest_run?.no_exec_price ?? null
+        : null;
+  const signalEdge =
+    signalSide === "yes"
+      ? detail.recommendation?.edge_yes ?? null
+      : signalSide === "no"
+        ? detail.recommendation?.edge_no ?? null
+        : null;
+  const hasVerifiedResearchEdge =
+    signalSide !== null &&
+    signalConservativeProbability !== null &&
+    signalConservativeProbability > 0.5 &&
+    signalEdge !== null &&
+    signalEdge > 0 &&
+    detail.latest_run?.confidence_label !== "low" &&
+    detail.latest_run?.priced_in_risk_label !== "high";
+  const analysisSignal: ResearchEdgeSignal = {
+    status: isRunning
+      ? "analysis_needed"
+      : hasVerifiedResearchEdge
+        ? "favorable"
+        : "no_favorable_setup",
+    side: signalSide,
+    win_probability: signalWinProbability,
+    conservative_probability: signalConservativeProbability,
+    live_price: signalPrice,
+    edge_after_buffer: signalEdge,
+    confidence: detail.latest_run?.confidence_label ?? null,
+    analysis_id: detail.request.id,
+    analyzed_at: detail.latest_run?.created_at ?? null,
+    reason: isRunning
+      ? "The research desk is still checking probability, price, confidence, and priced-in risk."
+      : hasVerifiedResearchEdge && signalSide
+        ? `${signalSide.toUpperCase()} has verified conservative edge after the 2% execution buffer.`
+        : "No side has verified research edge in this analysis. Wait, skip it, or refresh the research when conditions change.",
+  };
   const marketPrior = detail.latest_run?.market_mid_prob;
   const hasMarketPrior = marketPrior !== null && marketPrior !== undefined;
   const probabilityTitle = hasPointEstimate ? "Model YES read" : hasProbabilityRange ? "Probability range" : "Probability";
@@ -505,6 +565,8 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
             </div>
           ) : null}
         </section>
+
+        <ResearchEdgeSignalCard signal={analysisSignal} priceLabel="Analyzed price" />
 
         <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
           <Panel className="p-4">

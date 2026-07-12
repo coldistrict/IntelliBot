@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.main import app
 from app.api.routes.markets import get_polymarket_client
 from app.clients.polymarket_client import ResolvedMarketRecord
-from app.models import AnalysisRequest, AnalysisRun, Market, RuleParse
+from app.models import AnalysisRequest, AnalysisRun, Market, Recommendation, RuleParse
 from app.models.enums import (
     ClaimFamilyEnum,
     ConfidenceLabelEnum,
@@ -245,6 +245,10 @@ def test_manual_analysis_links_existing_market(client, session_factory: sessionm
     assert market_payload["total"] == 1
     assert market_payload["items"][0]["polymarket_id"] == "fed-cut-june-2026"
 
+    detail_response = client.get(f"/api/analyses/{payload['id']}")
+    assert detail_response.status_code == 200
+    assert detail_response.json()["presentation"]["headline"] == "Will the Fed cut by June 2026?"
+
 
 def test_public_market_discovery_lists_remote_polymarket_markets(client):
     class StubPolymarketClient:
@@ -288,6 +292,153 @@ def test_public_market_discovery_lists_remote_polymarket_markets(client):
     assert payload["items"][0]["category"] == "Crypto"
     assert payload["items"][0]["featured"] is True
     assert payload["items"][0]["yes_ask"] == 0.43
+    assert payload["items"][0]["research_edge_signal"] == {
+        "status": "analysis_needed",
+        "side": None,
+        "win_probability": None,
+        "conservative_probability": None,
+        "live_price": None,
+        "edge_after_buffer": None,
+        "confidence": None,
+        "analysis_id": None,
+        "analyzed_at": None,
+        "reason": "Run the research analysis to check whether the market price offers verified edge.",
+    }
+
+
+def test_public_market_discovery_surfaces_verified_research_edge_signal(
+    client,
+    session_factory: sessionmaker[Session],
+):
+    now = datetime.now(UTC)
+    with session_factory() as session:
+        market = Market(
+            polymarket_id="filing-by-friday",
+            title="Will the filing arrive by Friday?",
+            yes_bid=0.41,
+            yes_ask=0.43,
+            no_bid=0.57,
+            no_ask=0.59,
+            status="active",
+        )
+        session.add(market)
+        session.flush()
+        request = AnalysisRequest(
+            mode=ModeEnum.MANUAL,
+            input_type=InputTypeEnum.MARKET_ID,
+            input_text=market.polymarket_id,
+            input_payload={},
+            progress_json=initial_progress_payload(now),
+            market_id=market.id,
+            status=RequestStatusEnum.COMPLETE,
+            current_stage="complete",
+            started_at=now,
+            completed_at=now,
+        )
+        session.add(request)
+        session.flush()
+        rule_parse = RuleParse(
+            analysis_request_id=request.id,
+            market_id=market.id,
+            question_text=market.title,
+            event="A filing arrives by Friday",
+            entity_names=["Issuer"],
+            action="file",
+            claim_family=ClaimFamilyEnum.OFFICIAL_EVENT,
+            yes_condition="YES if the filing arrives by Friday.",
+            no_condition="NO otherwise.",
+            deadline_text="Friday",
+            directional_scoring_policy={},
+            fallback_sources=[],
+            official_domains=["sec.gov"],
+            ambiguity_flags=[],
+            clarity_score=0.9,
+            resolution_risk=0.1,
+            suitable_for_auto=True,
+            template_detected=TemplateKey.OFFICIAL_EVENT,
+            created_at=now,
+        )
+        session.add(rule_parse)
+        session.flush()
+        run = AnalysisRun(
+            request_id=request.id,
+            market_id=market.id,
+            rule_parse_id=rule_parse.id,
+            template_selected=TemplateKey.OFFICIAL_EVENT,
+            market_mid_prob=0.42,
+            yes_exec_price=0.43,
+            no_exec_price=0.59,
+            priced_in_risk_label=PricedInRiskLabelEnum.LOW,
+            numeric_estimate_available=True,
+            p_hat=0.68,
+            p_low=0.60,
+            p_high=0.74,
+            confidence_label=ConfidenceLabelEnum.MEDIUM,
+            recommendation_label=RecommendationLabelEnum.LEAN_YES,
+            created_at=now,
+        )
+        session.add(run)
+        session.flush()
+        session.add(
+            Recommendation(
+                analysis_run_id=run.id,
+                recommendation_label=RecommendationLabelEnum.LEAN_YES,
+                confidence_label=ConfidenceLabelEnum.MEDIUM,
+                edge_yes=0.15,
+                edge_no=-0.35,
+                rationale_json={"friction_buffer": 0.02},
+                created_at=now,
+            )
+        )
+        session.commit()
+        analysis_id = request.id
+
+    class StubPolymarketClient:
+        def discover_markets(self, *, query=None, view="popular", limit=25, offset=0):
+            return [
+                ResolvedMarketRecord(
+                    polymarket_id="filing-by-friday",
+                    title="Will the filing arrive by Friday?",
+                    url="https://polymarket.com/event/filing-by-friday",
+                    rules_text="Resolves YES if the filing arrives by Friday.",
+                    description=None,
+                    yes_bid=0.41,
+                    yes_ask=0.43,
+                    no_bid=0.57,
+                    no_ask=0.59,
+                    liquidity=25000,
+                    volume_24h=5000,
+                    spread=0.02,
+                    expiry_at=None,
+                    status="active",
+                )
+            ]
+
+    app.dependency_overrides[get_polymarket_client] = lambda: StubPolymarketClient()
+    response = client.get("/api/markets/discover")
+
+    assert response.status_code == 200
+    signal = response.json()["items"][0]["research_edge_signal"]
+    assert signal["status"] == "favorable"
+    assert signal["side"] == "yes"
+    assert signal["win_probability"] == 0.68
+    assert signal["conservative_probability"] == 0.60
+    assert signal["live_price"] == 0.43
+    assert signal["edge_after_buffer"] == 0.15
+    assert signal["analysis_id"] == analysis_id
+
+    with session_factory() as session:
+        stored_run = session.get(AnalysisRun, run.id)
+        assert stored_run is not None
+        stored_run.created_at = now - timedelta(days=2)
+        session.commit()
+
+    stale_response = client.get("/api/markets/discover")
+    stale_signal = stale_response.json()["items"][0]["research_edge_signal"]
+    assert stale_signal["status"] == "no_favorable_setup"
+    assert stale_signal["reason"] == (
+        "The latest research is more than 24 hours old. Refresh it before acting."
+    )
 
 
 def test_public_market_detail_falls_back_to_local_cache(

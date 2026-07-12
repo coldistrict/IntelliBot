@@ -208,6 +208,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/providers/billing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Provider Billing */
+        get: operations["provider_billing_api_providers_billing_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/providers/status": {
         parameters: {
             query?: never;
@@ -828,6 +845,56 @@ export interface components {
             /** Total Evidence */
             total_evidence: number;
         };
+        /** ProviderBillingItem */
+        ProviderBillingItem: {
+            /** As Of */
+            as_of?: string | null;
+            /**
+             * Balance Type
+             * @enum {string}
+             */
+            balance_type: "exact" | "estimated" | "usage_only" | "unavailable";
+            /** Budget Usd */
+            budget_usd?: number | null;
+            /** Credit Balance Usd */
+            credit_balance_usd?: number | null;
+            /**
+             * Currency
+             * @default USD
+             * @constant
+             */
+            currency: "USD";
+            /** Dashboard Url */
+            dashboard_url: string;
+            /** Message */
+            message: string;
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "openai" | "grok";
+            /** Remaining Usd */
+            remaining_usd?: number | null;
+            /** Setup Fields */
+            setup_fields?: string[];
+            /** Spent Month Usd */
+            spent_month_usd?: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "available" | "setup_required" | "error";
+        };
+        /** ProviderBillingResponse */
+        ProviderBillingResponse: {
+            grok: components["schemas"]["ProviderBillingItem"];
+            openai: components["schemas"]["ProviderBillingItem"];
+            /**
+             * Refreshed At
+             * Format: date-time
+             */
+            refreshed_at: string;
+        };
         /** ProviderStatusResponse */
         ProviderStatusResponse: {
             /** Fred Configured */
@@ -880,6 +947,7 @@ export interface components {
             no_bid?: number | null;
             /** Polymarket Id */
             polymarket_id: string;
+            research_edge_signal: components["schemas"]["ResearchEdgeSignalResponse"];
             /** Rules Text */
             rules_text?: string | null;
             /** Spread */
@@ -950,6 +1018,32 @@ export interface components {
          * @enum {string}
          */
         RequestStatusEnum: "queued" | "running" | "complete" | "failed";
+        /** ResearchEdgeSignalResponse */
+        ResearchEdgeSignalResponse: {
+            /** Analysis Id */
+            analysis_id?: number | null;
+            /** Analyzed At */
+            analyzed_at?: string | null;
+            /** Confidence */
+            confidence?: string | null;
+            /** Conservative Probability */
+            conservative_probability?: number | null;
+            /** Edge After Buffer */
+            edge_after_buffer?: number | null;
+            /** Live Price */
+            live_price?: number | null;
+            /** Reason */
+            reason: string;
+            /** Side */
+            side?: ("yes" | "no") | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "favorable" | "no_favorable_setup" | "analysis_needed";
+            /** Win Probability */
+            win_probability?: number | null;
+        };
         /** ReviewCreateRequest */
         ReviewCreateRequest: {
             decision: components["schemas"]["ReviewDecisionEnum"];
@@ -1595,6 +1689,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    provider_billing_api_providers_billing_get: {
+        parameters: {
+            query?: {
+                refresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderBillingResponse"];
                 };
             };
             /** @description Validation Error */

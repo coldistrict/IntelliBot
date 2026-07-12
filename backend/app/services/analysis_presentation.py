@@ -157,7 +157,7 @@ def build_analysis_presentation(
         what_it_means = analysis_run.final_summary
 
     return {
-        "headline": request.input_text,
+        "headline": rule_parse.question_text if rule_parse else request.input_text,
         "thesis": thesis,
         "status_note": status_note,
         "brief_sections": {

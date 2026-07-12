@@ -14,9 +14,17 @@ import {
   marketNoMidpoint,
   marketYesMidpoint,
 } from "@/components/markets/market-format";
+import {
+  calculateHighChanceReturn,
+  DEFAULT_RETURN_SETTINGS,
+  ReturnSettings,
+} from "@/components/markets/high-chance-return";
+import { HighChanceReturnCard } from "@/components/markets/high-chance-return-card";
+import { ResearchEdgeSignalCard } from "@/components/markets/research-edge-signal";
 
 type MarketDetailClientProps = {
   polymarketId: string;
+  initialReturnSettings?: ReturnSettings;
 };
 
 function statusVariant(status: string | null | undefined) {
@@ -29,7 +37,10 @@ function statusVariant(status: string | null | undefined) {
   return "muted" as const;
 }
 
-export function MarketDetailClient({ polymarketId }: MarketDetailClientProps) {
+export function MarketDetailClient({
+  polymarketId,
+  initialReturnSettings = DEFAULT_RETURN_SETTINGS,
+}: MarketDetailClientProps) {
   const router = useRouter();
   const [market, setMarket] = useState<PublicMarket | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -122,6 +133,7 @@ export function MarketDetailClient({ polymarketId }: MarketDetailClientProps) {
     market.description && market.description !== resolutionText
       ? market.description
       : "Resolution details are shown in the rules panel.";
+  const highChanceReturn = calculateHighChanceReturn(market, initialReturnSettings);
 
   return (
     <div className="space-y-6">
@@ -164,6 +176,11 @@ export function MarketDetailClient({ polymarketId }: MarketDetailClientProps) {
           {error}
         </div>
       ) : null}
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <HighChanceReturnCard result={highChanceReturn} settings={initialReturnSettings} />
+        <ResearchEdgeSignalCard signal={market.research_edge_signal} />
+      </section>
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <Panel className="p-4">

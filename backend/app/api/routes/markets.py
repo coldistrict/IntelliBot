@@ -11,7 +11,9 @@ from app.schemas.market import (
     MarketResponse,
     PublicMarketListResponse,
     PublicMarketResponse,
+    ResearchEdgeSignalResponse,
 )
+from app.services.market_signals import research_edge_signals_for_records
 
 router = APIRouter(prefix="/markets")
 
@@ -20,7 +22,10 @@ def get_polymarket_client() -> PolymarketClient:
     return PolymarketClient(enabled=True)
 
 
-def _public_market_response(record: ResolvedMarketRecord) -> PublicMarketResponse:
+def _public_market_response(
+    record: ResolvedMarketRecord,
+    signal: ResearchEdgeSignalResponse,
+) -> PublicMarketResponse:
     return PublicMarketResponse(
         polymarket_id=record.polymarket_id,
         title=record.title,
@@ -42,6 +47,7 @@ def _public_market_response(record: ResolvedMarketRecord) -> PublicMarketRespons
         image=record.image,
         featured=record.featured,
         is_new=record.is_new,
+        research_edge_signal=signal,
     )
 
 
@@ -71,13 +77,18 @@ def discover_markets(
         default="popular",
         pattern="^(popular|trending|liquidity|closing_soon|newest)$",
     ),
-    limit: int = Query(default=25, ge=1, le=50),
+    limit: int = Query(default=70, ge=1, le=70),
     offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_db_session),
     client: PolymarketClient = Depends(get_polymarket_client),
 ) -> PublicMarketListResponse:
     records = client.discover_markets(query=q, view=view, limit=limit, offset=offset)
+    signals = research_edge_signals_for_records(session, records)
     return PublicMarketListResponse(
-        items=[_public_market_response(record) for record in records],
+        items=[
+            _public_market_response(record, signals[record.polymarket_id])
+            for record in records
+        ],
         total=len(records),
     )
 
@@ -94,7 +105,8 @@ def get_public_market(
         record = _record_from_market(local_market) if local_market else None
     if record is None:
         raise HTTPException(status_code=404, detail="Polymarket market not found.")
-    return _public_market_response(record)
+    signal = research_edge_signals_for_records(session, [record])[record.polymarket_id]
+    return _public_market_response(record, signal)
 
 
 @router.get("", response_model=MarketListResponse)
