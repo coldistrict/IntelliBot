@@ -6,6 +6,8 @@ export const API_BASE_URL =
 type Schema<TName extends keyof components["schemas"]> = components["schemas"][TName];
 
 export type ProviderStatus = Schema<"ProviderStatusResponse">;
+export type ProviderBilling = Schema<"ProviderBillingResponse">;
+export type ProviderBillingItem = Schema<"ProviderBillingItem">;
 export type AnalysisSummary = Schema<"AnalysisRequestSummary">;
 export type AnalysisRun = Schema<"AnalysisRunResponse">;
 export type RuleParse = Schema<"RuleParseResponse">;
@@ -32,6 +34,7 @@ export type ManualAnalysisPayload = Schema<"ManualAnalysisCreateRequest">;
 export type QueuedAnalysisResponse = Schema<"AnalysisQueuedResponse">;
 export type PublicMarket = Schema<"PublicMarketResponse">;
 export type PublicMarketList = Schema<"PublicMarketListResponse">;
+export type ResearchEdgeSignal = Schema<"ResearchEdgeSignalResponse">;
 export type CalibrationScoreboard = Schema<"CalibrationScoreboardResponse">;
 export type CalibrationSummary = Schema<"ScoreboardSummary">;
 export type CalibrationBucket = Schema<"CalibrationBucket">;
@@ -107,6 +110,10 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
 
 export async function fetchProviderStatus(): Promise<ProviderStatus> {
   return fetchJson<ProviderStatus>("/api/providers/status");
+}
+
+export async function fetchProviderBilling(refresh = false): Promise<ProviderBilling> {
+  return fetchJson<ProviderBilling>(`/api/providers/billing${refresh ? "?refresh=true" : ""}`);
 }
 
 export async function fetchAnalyses(params?: {

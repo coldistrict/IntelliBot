@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -30,6 +31,19 @@ class MarketListResponse(BaseModel):
     total: int
 
 
+class ResearchEdgeSignalResponse(BaseModel):
+    status: Literal["favorable", "no_favorable_setup", "analysis_needed"]
+    side: Literal["yes", "no"] | None = None
+    win_probability: float | None = None
+    conservative_probability: float | None = None
+    live_price: float | None = None
+    edge_after_buffer: float | None = None
+    confidence: str | None = None
+    analysis_id: int | None = None
+    analyzed_at: datetime | None = None
+    reason: str
+
+
 class PublicMarketResponse(BaseModel):
     polymarket_id: str
     title: str
@@ -51,6 +65,7 @@ class PublicMarketResponse(BaseModel):
     image: str | None = None
     featured: bool = False
     is_new: bool = False
+    research_edge_signal: ResearchEdgeSignalResponse
 
 
 class PublicMarketListResponse(BaseModel):

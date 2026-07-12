@@ -28,10 +28,15 @@ class Settings(BaseSettings):
 
     openai_api_key: SecretStr | None = None
     xai_api_key: SecretStr | None = None
+    openai_admin_api_key: SecretStr | None = None
+    openai_monthly_budget_usd: float | None = None
+    xai_management_api_key: SecretStr | None = None
+    xai_team_id: str | None = None
     tavily_api_key: SecretStr | None = None
     fred_api_key: SecretStr | None = None
     openai_base_url: str = "https://api.openai.com/v1"
     xai_base_url: str = "https://api.x.ai/v1"
+    xai_management_base_url: str = "https://management-api.x.ai"
     openai_model: str = "gpt-5.4-mini"
     xai_model: str = "grok-4-1-fast-non-reasoning"
     xai_social_model: str = "grok-4-1-fast-non-reasoning"
@@ -44,12 +49,21 @@ class Settings(BaseSettings):
     @field_validator(
         "openai_api_key",
         "xai_api_key",
+        "openai_admin_api_key",
+        "xai_management_api_key",
         "tavily_api_key",
         "fred_api_key",
         mode="before",
     )
     @classmethod
     def blank_secret_to_none(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("xai_team_id", mode="before")
+    @classmethod
+    def blank_text_to_none(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():
             return None
         return value

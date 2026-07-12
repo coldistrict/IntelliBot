@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MarketBrowserClient } from "@/components/markets/market-browser-client";
@@ -63,6 +63,18 @@ const market = {
   image: null,
   featured: true,
   is_new: false,
+  research_edge_signal: {
+    status: "analysis_needed",
+    side: null,
+    win_probability: null,
+    conservative_probability: null,
+    live_price: null,
+    edge_after_buffer: null,
+    confidence: null,
+    analysis_id: null,
+    analyzed_at: null,
+    reason: "Run the research analysis to check whether the market price offers verified edge.",
+  },
 } as const;
 
 describe("MarketBrowserClient", () => {
@@ -120,14 +132,14 @@ describe("MarketBrowserClient", () => {
     render(<MarketBrowserClient />);
 
     await screen.findByText("Will the Fed cut rates by June 2026?");
-    fireEvent.change(screen.getByLabelText(/search/i), { target: { value: "bitcoin" } });
+    fireEvent.change(screen.getByLabelText("Search", { exact: true }), { target: { value: "bitcoin" } });
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
 
     await waitFor(() => {
       expect(fetchPublicMarkets).toHaveBeenLastCalledWith({
         q: "bitcoin",
         view: "popular",
-        limit: 25,
+        limit: 70,
       });
     });
   });
@@ -136,20 +148,86 @@ describe("MarketBrowserClient", () => {
     render(<MarketBrowserClient />);
 
     await screen.findByText("Will the Fed cut rates by June 2026?");
-    fireEvent.change(screen.getByLabelText(/search/i), { target: { value: "bitcoin" } });
+    fireEvent.change(screen.getByLabelText("Search", { exact: true }), { target: { value: "bitcoin" } });
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
 
     await screen.findByText("Clear");
     fireEvent.click(screen.getByRole("button", { name: "Trending" }));
 
-    expect(screen.getByLabelText(/search/i)).toHaveValue("");
+    expect(screen.getByLabelText("Search", { exact: true })).toHaveValue("");
     await waitFor(() => {
       expect(fetchPublicMarkets).toHaveBeenLastCalledWith({
         q: undefined,
         view: "trending",
-        limit: 25,
+        limit: 70,
       });
     });
+  });
+
+  it("calculates higher-chance returns from the live ask and user stake", async () => {
+    vi.mocked(fetchPublicMarkets).mockResolvedValue({
+      items: [
+        {
+          ...market,
+          yes_bid: 0.14,
+          yes_ask: 0.145,
+          no_bid: 0.855,
+          no_ask: 0.86,
+        },
+      ],
+      total: 1,
+      has_more: false,
+    });
+
+    render(<MarketBrowserClient />);
+
+    const chanceCard = await screen.findByRole("region", { name: "Higher-chance return check" });
+    expect(within(chanceCard).getByText("NO · 85.8% implied")).toBeInTheDocument();
+    expect(within(chanceCard).getByText("$15.28")).toBeInTheDocument();
+    expect(within(chanceCard).getByText("$100.00")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Stake"), { target: { value: "200" } });
+    expect(within(chanceCard).getByText("$30.56")).toBeInTheDocument();
+    expect(within(chanceCard).getByText("$200.00")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Higher-chance only" }));
+    expect(screen.getByText("1 matching of 1 loaded")).toBeInTheDocument();
+  });
+
+  it("highlights and filters favorable setups", async () => {
+    vi.mocked(fetchPublicMarkets).mockResolvedValue({
+      items: [
+        {
+          ...market,
+          research_edge_signal: {
+            status: "favorable",
+            side: "yes",
+            win_probability: 0.68,
+            conservative_probability: 0.6,
+            live_price: 0.43,
+            edge_after_buffer: 0.15,
+            confidence: "medium",
+            analysis_id: 44,
+            analyzed_at: "2026-05-30T14:00:00Z",
+            reason: "YES has verified conservative edge.",
+          },
+        },
+      ],
+      total: 1,
+      has_more: false,
+    });
+
+    render(<MarketBrowserClient />);
+
+    expect(await screen.findByText("YES has verified edge")).toBeInTheDocument();
+    expect(screen.getByText("60%")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Review the research" })).toHaveAttribute(
+      "href",
+      "/analyses/44",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Research edge only" }));
+    expect(screen.getByText("1 matching of 1 loaded")).toBeInTheDocument();
   });
 
   it("shows a retryable error state, never the empty-state copy, when loading fails", async () => {
@@ -195,7 +273,7 @@ describe("MarketBrowserClient", () => {
       expect(fetchPublicMarkets).toHaveBeenLastCalledWith({
         q: undefined,
         view: "popular",
-        limit: 25,
+        limit: 70,
         offset: 1,
       });
     });
@@ -267,6 +345,35 @@ describe("MarketDetailClient", () => {
     expect(await screen.findByText("Description-only resolution text.")).toBeInTheDocument();
     expect(screen.getAllByText("Description-only resolution text.")).toHaveLength(1);
     expect(screen.getByText("Resolution details are shown in the rules panel.")).toBeInTheDocument();
+  });
+
+  it("shows higher-chance return and research edge separately on market detail", async () => {
+    vi.mocked(fetchPublicMarket).mockResolvedValue({
+      ...market,
+      yes_bid: 0.14,
+      yes_ask: 0.145,
+      no_bid: 0.855,
+      no_ask: 0.86,
+      research_edge_signal: {
+        status: "favorable",
+        side: "no",
+        win_probability: 0.7,
+        conservative_probability: 0.62,
+        live_price: 0.54,
+        edge_after_buffer: 0.06,
+        confidence: "high",
+        analysis_id: 51,
+        analyzed_at: "2026-05-30T14:00:00Z",
+        reason: "NO has verified conservative edge.",
+      },
+    });
+
+    render(<MarketDetailClient polymarketId="fed-cut-june-2026" />);
+
+    expect(await screen.findByText("NO · 85.8% implied")).toBeInTheDocument();
+    expect(await screen.findByText("NO has verified edge")).toBeInTheDocument();
+    expect(screen.getByText("Edge after buffer")).toBeInTheDocument();
+    expect(screen.getByText("+6%")).toBeInTheDocument();
   });
 
   it("links prior analyses of the same market and hides the section when none exist", async () => {
