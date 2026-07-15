@@ -66,6 +66,9 @@ export function useAnalysisDetail(analysisId: string) {
   const [error, setError] = useState<string | null>(null);
   const [isRerunning, setIsRerunning] = useState(false);
   const mountedRef = useRef(true);
+  // Mirror of `detail` so the polling callback can read the latest value
+  // without depending on it, which would reset the interval on every merge.
+  const detailRef = useRef<AnalysisDetail | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -73,6 +76,10 @@ export function useAnalysisDetail(analysisId: string) {
       mountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    detailRef.current = detail;
+  }, [detail]);
 
   const loadDetail = useCallback(async () => {
     try {
@@ -97,8 +104,9 @@ export function useAnalysisDetail(analysisId: string) {
         return;
       }
 
-      const needsDetailRefresh = detail
-        ? shouldRefreshDetailForUnlockedArtifacts(detail, payload)
+      const currentDetail = detailRef.current;
+      const needsDetailRefresh = currentDetail
+        ? shouldRefreshDetailForUnlockedArtifacts(currentDetail, payload)
         : false;
 
       setDetail((current) => (current ? mergeProgressIntoDetail(current, payload) : current));
@@ -117,14 +125,16 @@ export function useAnalysisDetail(analysisId: string) {
       }
       setError(loadError instanceof Error ? loadError.message : "Unable to refresh analysis progress.");
     }
-  }, [analysisId, detail, loadDetail]);
+  }, [analysisId, loadDetail]);
 
   useEffect(() => {
     void loadDetail();
   }, [loadDetail]);
 
+  const requestStatus = detail?.request.status ?? null;
+
   useEffect(() => {
-    if (!detail || ["complete", "failed"].includes(detail.request.status)) {
+    if (!requestStatus || ["complete", "failed"].includes(requestStatus)) {
       return;
     }
 
@@ -135,7 +145,7 @@ export function useAnalysisDetail(analysisId: string) {
     return () => {
       window.clearInterval(interval);
     };
-  }, [detail?.request.status, loadProgress]);
+  }, [requestStatus, loadProgress]);
 
   async function handleRerun() {
     setIsRerunning(true);

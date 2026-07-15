@@ -52,6 +52,11 @@ files = [
     "app/services/analysis_stage_fact_pipeline.py",
     "app/services/analysis_stage_scoring.py",
     "app/services/analysis_stage_briefing.py",
+    "app/services/calibration.py",
+    "app/services/market_signals.py",
+    "app/services/model_cache.py",
+    "app/services/outcome_tracker.py",
+    "app/services/provider_billing.py",
 ]
 
 [tool.hatch.build.targets.wheel]

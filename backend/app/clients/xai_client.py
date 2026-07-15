@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from time import perf_counter
 from typing import Any, TypeVar
@@ -14,6 +15,8 @@ from app.models.enums import ExecutionResultModeEnum
 from app.services.analysis_execution import enforce_run_budget, record_model_call
 
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
+
+logger = logging.getLogger("uvicorn.error").getChild("intellibot.llm_client")
 
 
 class XAIResponsesClient:
@@ -87,17 +90,23 @@ class XAIResponsesClient:
             input_hash=input_hash,
         )
         if cached is not None:
-            record_model_call(
-                session,
-                provider="xai",
-                model=self.model,
-                task_name=task_name,
-                prompt_version=prompt_version,
-                result_mode=ExecutionResultModeEnum.MODEL,
-                started_at=perf_counter(),
-                cache_hit=True,
-                detail={"tools_path": bool(tools)},
-            )
+            try:
+                record_model_call(
+                    session,
+                    provider="xai",
+                    model=self.model,
+                    task_name=task_name,
+                    prompt_version=prompt_version,
+                    result_mode=ExecutionResultModeEnum.MODEL,
+                    started_at=perf_counter(),
+                    cache_hit=True,
+                    detail={"tools_path": bool(tools)},
+                )
+            except Exception:
+                session.rollback()
+                logger.exception(
+                    "Could not record cached xai call for %s in the ledger.", task_name
+                )
             return schema_model.model_validate(cached)
 
         enforce_run_budget(session, task_name=task_name)
@@ -124,39 +133,57 @@ class XAIResponsesClient:
             content = self._extract_output_text(response_payload)
             parsed = schema_model.model_validate_json(content)
         except Exception as exc:
+            try:
+                record_model_call(
+                    session,
+                    provider="xai",
+                    model=self.model,
+                    task_name=task_name,
+                    prompt_version=prompt_version,
+                    result_mode=ExecutionResultModeEnum.FAILED,
+                    started_at=started_at,
+                    error=exc,
+                    detail={"tools_path": bool(tools)},
+                )
+            except Exception:
+                # Keep the original provider error as the stage outcome; a ledger
+                # write failure must not replace it or poison the session.
+                session.rollback()
+                logger.exception(
+                    "Could not record failed xai call for %s in the ledger.", task_name
+                )
+            raise
+        try:
             record_model_call(
                 session,
                 provider="xai",
                 model=self.model,
                 task_name=task_name,
                 prompt_version=prompt_version,
-                result_mode=ExecutionResultModeEnum.FAILED,
+                result_mode=ExecutionResultModeEnum.MODEL,
                 started_at=started_at,
-                error=exc,
+                response_payload=response_payload,
                 detail={"tools_path": bool(tools)},
             )
-            raise
-        record_model_call(
-            session,
-            provider="xai",
-            model=self.model,
-            task_name=task_name,
-            prompt_version=prompt_version,
-            result_mode=ExecutionResultModeEnum.MODEL,
-            started_at=started_at,
-            response_payload=response_payload,
-            detail={"tools_path": bool(tools)},
-        )
-        store_cached_response(
-            session,
-            provider="xai",
-            model=self.model,
-            task_name=task_name,
-            prompt_version=prompt_version,
-            input_hash=input_hash,
-            output_json=parsed.model_dump(mode="json"),
-        )
-        session.commit()
+            store_cached_response(
+                session,
+                provider="xai",
+                model=self.model,
+                task_name=task_name,
+                prompt_version=prompt_version,
+                input_hash=input_hash,
+                output_json=parsed.model_dump(mode="json"),
+            )
+            session.commit()
+        except Exception:
+            # The model call itself succeeded; ledger/cache persistence is not a
+            # reason to discard the result and degrade the stage to a heuristic.
+            session.rollback()
+            logger.exception(
+                "xai call for %s succeeded but persisting its ledger/cache rows failed; "
+                "continuing with the model result.",
+                task_name,
+            )
         return parsed
 
     def _post_json(self, path: str, payload: Mapping[str, Any]) -> dict[str, Any]:

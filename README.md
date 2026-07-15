@@ -80,6 +80,8 @@ docker compose down
 ## Environment Strategy
 
 - Root `.env` is the single source of truth for local development.
+- The backend API is unauthenticated and binds to `127.0.0.1` by default; set `APP_HOST=0.0.0.0`
+  (and pass `--host` to uvicorn) only if you deliberately want it reachable from your network.
 - Frontend scripts load it with `dotenv-cli`.
 - Backend settings load it with `pydantic-settings`.
 - `.env` is gitignored; only `.env.example` should be committed.

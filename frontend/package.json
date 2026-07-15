@@ -5,6 +5,7 @@
     "dev": "dotenv -e ../.env -- next dev",
     "build": "dotenv -e ../.env -- next build",
     "generate:api-types": "node ./scripts/generate-api-types.mjs",
+    "lint": "eslint .",
     "start": "dotenv -e ../.env -- next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
@@ -17,6 +18,7 @@
     "tailwind-merge": "^3.3.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@types/node": "^22.15.17",
@@ -24,6 +26,8 @@
     "@types/react-dom": "^19.1.2",
     "autoprefixer": "^10.4.21",
     "dotenv-cli": "^8.0.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.3.9",
     "jsdom": "^26.1.0",
     "openapi-typescript": "^7.8.0",
     "postcss": "^8.5.3",

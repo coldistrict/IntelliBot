@@ -50,6 +50,7 @@ export function MarketDetailClient({
   const router = useRouter();
   const [market, setMarket] = useState<PublicMarket | null>(null);
   const [priorAnalyses, setPriorAnalyses] = useState<AnalysisSummary[]>([]);
+  const [priorAnalysesFailed, setPriorAnalysesFailed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +60,7 @@ export function MarketDetailClient({
     setIsLoading(true);
     setError(null);
     setPriorAnalyses([]);
+    setPriorAnalysesFailed(false);
 
     fetchPublicMarket(polymarketId)
       .then((payload) => {
@@ -84,7 +86,11 @@ export function MarketDetailClient({
         }
       })
       .catch(() => {
-        // Prior-run links are supplementary; the section is simply omitted on failure.
+        // Prior-run links are supplementary; show a quiet notice instead of
+        // silently pretending the market was never analyzed.
+        if (!cancelled) {
+          setPriorAnalysesFailed(true);
+        }
       });
 
     return () => {
@@ -218,6 +224,14 @@ export function MarketDetailClient({
                   </Link>
                 ))}
               </div>
+            </div>
+          ) : null}
+          {priorAnalysesFailed ? (
+            <div className="border-t border-black/10 pt-4">
+              <p className="text-sm leading-6 text-ink/60" role="status">
+                Prior research for this market could not be loaded, so existing memos may
+                not be listed here.
+              </p>
             </div>
           ) : null}
         </Panel>
