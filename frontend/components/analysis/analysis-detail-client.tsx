@@ -758,6 +758,13 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
                   <p className="mt-2 text-sm leading-6 text-ink/60">
                     YES midpoint before evidence adjustments.
                   </p>
+                  {detail.latest_run?.blind_p_hat !== null && detail.latest_run?.blind_p_hat !== undefined ? (
+                    <p className="mt-2 text-sm leading-6 text-ink/60">
+                      Blind model read:{" "}
+                      <span className="font-semibold text-ink">{formatPercent(detail.latest_run.blind_p_hat)}</span>{" "}
+                      — estimated without seeing the market price.
+                    </p>
+                  ) : null}
                 </div>
               </>
             ) : (

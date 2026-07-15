@@ -24,6 +24,7 @@ TASK_STAGE = {
     "fact_verify": "fact_verification",
     "evidence_role": "evidence_classification",
     "evidence_adjudication": "factor_mapping",
+    "blind_probability": "probability_estimation",
     "final_brief": "brief_generation",
     "fred": "retrieval",
 }
@@ -274,16 +275,35 @@ def _stage_latency_ms(state: Mapping[str, Any]) -> int:
         return 1
 
 
+# Auxiliary research signals: recorded in the ledger like every other call, but
+# their failure never gates run quality because they do not feed p_hat, the
+# recommendation, or the published forecast's headline numbers.
+AUXILIARY_TASKS = {"blind_probability"}
+
+
 def derive_quality(events: list[ExecutionEvent], *, has_directional_evidence: bool) -> tuple[RunQualityEnum, list[dict[str, Any]]]:
     if not events:
         return RunQualityEnum.UNKNOWN, [{"code": "missing_execution_ledger"}]
     reasons: list[dict[str, Any]] = []
     fallback_tasks = sorted(
-        {event.task_name for event in events if event.result_mode == ExecutionResultModeEnum.DETERMINISTIC_FALLBACK and event.task_name}
+        {
+            event.task_name
+            for event in events
+            if event.result_mode == ExecutionResultModeEnum.DETERMINISTIC_FALLBACK
+            and event.task_name
+            and event.task_name not in AUXILIARY_TASKS
+        }
     )
     if fallback_tasks:
         reasons.append({"code": "deterministic_fallback", "tasks": fallback_tasks})
-    failed = sorted({event.task_name or event.stage_key for event in events if event.result_mode == ExecutionResultModeEnum.FAILED})
+    failed = sorted(
+        {
+            event.task_name or event.stage_key
+            for event in events
+            if event.result_mode == ExecutionResultModeEnum.FAILED
+            and (event.task_name or "") not in AUXILIARY_TASKS
+        }
+    )
     if failed:
         reasons.append({"code": "failed_execution", "tasks": failed})
     if not has_directional_evidence:

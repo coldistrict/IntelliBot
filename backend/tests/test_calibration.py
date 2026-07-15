@@ -63,6 +63,7 @@ def _seed_completed_run(
     yes_exec_price: float | None = None,
     no_exec_price: float | None = None,
     template: TemplateKey = TemplateKey.OFFICIAL_EVENT,
+    blind_p_hat: float | None = None,
 ) -> AnalysisRun:
     now = datetime.now(UTC)
     request = AnalysisRequest(
@@ -120,6 +121,7 @@ def _seed_completed_run(
         p_high=p_hat + 0.1 if p_hat is not None else None,
         confidence_label=confidence_label,
         recommendation_label=recommendation_label,
+        blind_p_hat=blind_p_hat,
         created_at=now,
     )
     session.add(run)
@@ -138,6 +140,7 @@ def _seed_completed_run(
             is_repeat=False,
             p_hat=p_hat,
             market_mid_prob=market_mid_prob,
+            blind_p_hat=blind_p_hat,
         )
     )
     session.commit()
@@ -325,6 +328,30 @@ def test_scoreboard_math(client, session_factory: sessionmaker[Session]):
     pending_rows = payload["pending"]
     assert len(pending_rows) == 1
     assert pending_rows[0]["title"] == "Pending market"
+
+
+def test_scoreboard_scores_blind_read_as_fifth_view(client, session_factory: sessionmaker[Session]):
+    with session_factory() as session:
+        market = _seed_market(
+            session, polymarket_id="401", title="Blind view market", resolved_outcome="yes"
+        )
+        _seed_completed_run(
+            session,
+            market=market,
+            p_hat=0.8,
+            market_mid_prob=0.5,
+            blind_p_hat=0.9,
+        )
+
+    response = client.get("/api/calibration/scoreboard")
+
+    assert response.status_code == 200
+    payload = response.json()
+    summary = payload["summary"]
+    assert summary["blind_runs"] == 1
+    # (0.9 - 1)^2 = 0.01
+    assert summary["avg_blind_brier"] == 0.01
+    assert payload["resolved"][0]["blind_brier"] == 0.01
 
 
 def test_scoreboard_empty_state(client):

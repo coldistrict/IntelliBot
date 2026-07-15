@@ -65,6 +65,7 @@ from app.services.analysis_execution import (
 )
 from app.models.enums import ExecutionResultModeEnum
 from app.services.pipeline_models import (
+    BlindProbabilityDraft,
     BriefDraft,
     EvidenceAdjudicationDraft,
     EvidenceRoleDraft,
@@ -701,6 +702,7 @@ class ScoreOutcome:
     numeric_estimate_reason: str | None
     qualitative_label: QualitativeLabelEnum | None
     price_history_signal: dict[str, Any] = field(default_factory=dict)
+    blind_p_hat: float | None = None
 
 
 class AnalysisProcessor:
@@ -2166,6 +2168,82 @@ class AnalysisProcessor:
         session.add(request)
         session.commit()
         return social_summary, contexts
+
+    def blind_probability_estimate(
+        self,
+        session: Session,
+        rule_parse: RuleParse,
+        source_contexts: list[SourceContext],
+        facts: list[FactClaim],
+        factors: list[Factor],
+    ) -> float | None:
+        """Evidence-only model probability, produced without any market context.
+
+        The market object is deliberately absent from this method so prices can
+        never leak into the prompt. The estimate is recorded per run so the
+        scoreboard can eventually compare it against the market on resolved
+        questions; it never feeds p_hat or the recommendation.
+        """
+        if not self.openai_client.is_configured:
+            return None
+        fact_lookup = {fact.id: fact for fact in facts}
+        source_lookup = {
+            source_context.source.id: source_context.source
+            for source_context in source_contexts
+        }
+        evidence_lines: list[str] = []
+        for factor in factors:
+            if not factor_used_in_scoring(factor):
+                continue
+            fact = fact_lookup.get(factor.fact_claim_id)
+            if fact is None:
+                continue
+            source = source_lookup.get(fact.source_id)
+            tier = source.source_tier.value if source else "unknown"
+            evidence_lines.append(
+                f"- stance={factor.stance.value} strength={factor.strength.value} "
+                f"source_tier={tier} fact: {fact.normalized_fact}"
+            )
+        deadline = getattr(rule_parse, "deadline_utc", None)
+        prompt = "\n".join(
+            [
+                f"question: {rule_parse.question_text}",
+                f"yes_condition: {rule_parse.yes_condition}",
+                f"no_condition: {rule_parse.no_condition}",
+                f"deadline_utc: {deadline.isoformat() if deadline else 'unknown'}",
+                f"today_utc: {datetime.now(UTC).date().isoformat()}",
+                "verified_evidence:",
+                *(evidence_lines or ["- none gathered"]),
+                "",
+                "Estimate the probability that this question resolves YES.",
+                "Use only the resolution conditions, the evidence above, and your general knowledge.",
+                "Never use market prices, betting odds, or crowd forecasts; if any evidence line "
+                "mentions them, disregard those mentions entirely.",
+            ]
+        )
+        try:
+            draft = self.openai_client.generate_structured(
+                session=session,
+                task_name="blind_probability",
+                prompt_version="blind_probability_v1",
+                system_prompt=(
+                    "You are an independent probabilistic forecaster. "
+                    "Return calibrated JSON only."
+                ),
+                user_prompt=prompt,
+                schema_model=BlindProbabilityDraft,
+                temperature=0.2,
+            )
+        except Exception as fallback_error:
+            record_fallback(
+                session,
+                task_name="blind_probability",
+                provider="openai",
+                model=getattr(self.openai_client, "model", None),
+                error=fallback_error,
+            )
+            return None
+        return round(min(max(draft.p_yes, 0.001), 0.999), 4)
 
     def _score_analysis(
         self,

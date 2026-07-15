@@ -41,6 +41,15 @@ def run_scoring_stage(
         facts,
         factors,
     )
+    # Independent evidence-only read, produced without market context so the
+    # scoreboard can compare the model against the market on resolved runs.
+    score_outcome.blind_p_hat = processor.blind_probability_estimate(
+        session,
+        rule_parse,
+        source_contexts,
+        facts,
+        factors,
+    )
 
     mark_stage_complete(
         request,

@@ -54,6 +54,7 @@ const emptyScoreboard: CalibrationScoreboard = {
     unknown_forecasts: 0,
     user_before_runs: 0,
     user_after_runs: 0,
+    blind_runs: 0,
   },
   buckets: [],
   template_slices: [],

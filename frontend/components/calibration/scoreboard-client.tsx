@@ -237,11 +237,12 @@ export function ScoreboardClient() {
 
       <Panel className="p-5">
         <div className="border-b border-black/10 pb-3">
-          <p className="section-label">Four Brier views</p>
-          <h3 className="mt-1.5 font-serif text-2xl text-ink">Model, market, and your before/after decisions</h3>
+          <p className="section-label">Five Brier views</p>
+          <h3 className="mt-1.5 font-serif text-2xl text-ink">Model, blind read, market, and your before/after decisions</h3>
         </div>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <div><p className="section-label">Model · all scored</p><p className="mt-2 text-2xl font-semibold text-ink">{formatBrier(summary?.avg_model_brier)}</p><p className="mt-1 text-xs text-ink/50">{summary?.scored_runs ?? 0} forecast(s)</p></div>
+          <div><p className="section-label">Model · blind read</p><p className="mt-2 text-2xl font-semibold text-ink">{formatBrier(summary?.avg_blind_brier)}</p><p className="mt-1 text-xs text-ink/50">{summary?.blind_runs ?? 0} priced blind</p></div>
           <div><p className="section-label">Market · head-to-head</p><p className="mt-2 text-2xl font-semibold text-ink">{formatBrier(summary?.head_to_head_market_brier)}</p><p className="mt-1 text-xs text-ink/50">{summary?.head_to_head_runs ?? 0} comparable</p></div>
           <div><p className="section-label">You · before research</p><p className="mt-2 text-2xl font-semibold text-ink">{formatBrier(summary?.avg_user_before_brier)}</p><p className="mt-1 text-xs text-ink/50">{summary?.user_before_runs ?? 0} journaled</p></div>
           <div><p className="section-label">You · after research</p><p className="mt-2 text-2xl font-semibold text-ink">{formatBrier(summary?.avg_user_after_brier)}</p><p className="mt-1 text-xs text-ink/50">{summary?.user_after_runs ?? 0} journaled</p></div>

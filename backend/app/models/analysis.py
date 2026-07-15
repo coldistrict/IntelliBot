@@ -185,6 +185,7 @@ class AnalysisRun(Base):
     )
     market_match_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     evidence_update: Mapped[float | None] = mapped_column(Float)
+    blind_p_hat: Mapped[float | None] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
@@ -526,6 +527,7 @@ class PublishedForecast(Base):
     is_repeat: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     p_hat: Mapped[float | None] = mapped_column(Float)
     market_mid_prob: Mapped[float | None] = mapped_column(Float)
+    blind_p_hat: Mapped[float | None] = mapped_column(Float)
 
     analysis_run: Mapped["AnalysisRun"] = relationship(back_populates="published_forecast")
 
