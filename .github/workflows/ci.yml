@@ -60,6 +60,8 @@ jobs:
       # frontend scripts load the gitignored root .env via dotenv-cli.
       - name: Create empty .env
         run: touch .env
+      - name: Lint
+        run: pnpm --filter frontend lint
       - name: Typecheck
         run: pnpm --filter frontend typecheck
       - name: Test
