@@ -4,7 +4,7 @@
   "scripts": {
     "db:upgrade": "uv run --project . alembic -c alembic.ini upgrade head",
     "db:revision": "uv run --project . alembic -c alembic.ini revision --autogenerate",
-    "dev": "uv run --project . uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "dev": "uv run --project . uvicorn app.main:app --reload --host 127.0.0.1 --port 8000",
     "build": "uv run --project . python -m compileall app",
     "typecheck": "uv run --project . ruff check app tests && uv run --project . mypy",
     "lint": "uv run --project . ruff check app tests",

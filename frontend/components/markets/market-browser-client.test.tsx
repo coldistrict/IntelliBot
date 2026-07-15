@@ -339,6 +339,17 @@ describe("MarketDetailClient", () => {
     });
   });
 
+  it("shows a quiet notice when prior research cannot be loaded", async () => {
+    vi.mocked(fetchAnalyses).mockRejectedValue(new Error("backend unavailable"));
+
+    render(<MarketDetailClient polymarketId="fed-cut-june-2026" />);
+
+    expect(await screen.findByRole("heading", { name: market.title })).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Prior research for this market could not be loaded/i),
+    ).toBeInTheDocument();
+  });
+
   it("does not repeat description-only resolution text in the context panel", async () => {
     vi.mocked(fetchPublicMarket).mockResolvedValue({
       ...market,

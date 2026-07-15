@@ -16,7 +16,8 @@ class Settings(BaseSettings):
 
     app_name: str = "Polymarket Copilot v1"
     app_env: str = "development"
-    app_host: str = "0.0.0.0"
+    # The API has no auth; bind to loopback unless APP_HOST deliberately opens it up.
+    app_host: str = "127.0.0.1"
     app_port: int = 8000
     frontend_url: str = "http://localhost:3000"
 

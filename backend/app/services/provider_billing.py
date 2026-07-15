@@ -55,7 +55,7 @@ class ProviderBillingService:
 
     def _openai_billing(self, now: datetime) -> ProviderBillingItem:
         key = self.settings.openai_admin_api_key
-        if not self.settings.has_secret(key):
+        if key is None or not self.settings.has_secret(key):
             return ProviderBillingItem(
                 provider="openai",
                 status="setup_required",
@@ -138,11 +138,11 @@ class ProviderBillingService:
         key = self.settings.xai_management_api_key
         team_id = (self.settings.xai_team_id or "").strip()
         missing = []
-        if not self.settings.has_secret(key):
+        if key is None or not self.settings.has_secret(key):
             missing.append("XAI_MANAGEMENT_API_KEY")
         if not team_id:
             missing.append("XAI_TEAM_ID")
-        if missing:
+        if missing or key is None:
             return ProviderBillingItem(
                 provider="grok",
                 status="setup_required",

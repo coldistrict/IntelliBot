@@ -151,7 +151,7 @@ def _journal_brier(
         probability = payload.get("prior_probability")
     else:
         decision = payload.get("decision")
-        probability = {"yes": 1.0, "no": 0.0}.get(decision)
+        probability = {"yes": 1.0, "no": 0.0}.get(decision) if isinstance(decision, str) else None
     if not isinstance(probability, (int, float)):
         return None
     return _round_score((float(probability) - outcome_value) ** 2)
