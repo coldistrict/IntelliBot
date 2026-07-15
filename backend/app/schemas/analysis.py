@@ -137,6 +137,7 @@ class AnalysisRunResponse(ORMModel):
     attempt_reason: AttemptReasonEnum = AttemptReasonEnum.ORIGINAL
     market_match_json: dict[str, Any] = Field(default_factory=dict)
     evidence_update: float | None = None
+    blind_p_hat: float | None = None
     created_at: datetime
     recommendation: RecommendationResponse | None = None
 
@@ -379,6 +380,7 @@ class ProbabilityMathResponse(BaseModel):
     total_evidence: float
     p_hat: float | None = None
     evidence_update: float | None = None
+    blind_p_hat: float | None = None
     price_history_signal: dict[str, Any] = Field(default_factory=dict)
 
 

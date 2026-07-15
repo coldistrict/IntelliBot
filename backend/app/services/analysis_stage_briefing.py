@@ -90,6 +90,7 @@ def run_briefing_stage(
         if analysis_run.p_hat is not None and analysis_run.market_mid_prob is not None
         else None
     )
+    analysis_run.blind_p_hat = score_outcome.blind_p_hat
     analysis_run.market_match_json = {
         **(analysis_run.market_match_json or {}),
         "price_history_signal": score_outcome.price_history_signal,
@@ -189,6 +190,7 @@ def run_briefing_stage(
                 "midpoint_yes": analysis_run.market_mid_prob,
             },
             quality_state=quality,
+            blind_p_hat=analysis_run.blind_p_hat,
             attempt_reason=analysis_run.attempt_reason,
             is_repeat=prior_forecasts > 0,
             p_hat=analysis_run.p_hat,

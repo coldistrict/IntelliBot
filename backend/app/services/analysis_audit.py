@@ -458,6 +458,7 @@ def build_analysis_audit(
             "total_evidence": round(total_evidence, 4),
             "p_hat": analysis_run.p_hat,
             "evidence_update": analysis_run.evidence_update,
+            "blind_p_hat": analysis_run.blind_p_hat,
             "price_history_signal": (analysis_run.market_match_json or {}).get("price_history_signal", {}),
         },
         "uncertainty": {

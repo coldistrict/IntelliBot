@@ -104,6 +104,11 @@ def _resolved_row(
         if forecast.market_mid_prob is not None
         else None
     )
+    blind_brier = (
+        _round_score((forecast.blind_p_hat - outcome_value) ** 2)
+        if forecast.blind_p_hat is not None
+        else None
+    )
 
     direction_hit: bool | None = None
     if forecast.p_hat is not None and forecast.p_hat != 0.5:
@@ -132,6 +137,7 @@ def _resolved_row(
         quality_state=forecast.quality_state,
         user_before_brier=_journal_brier(run, JournalEventTypeEnum.BEFORE, outcome_value),
         user_after_brier=_journal_brier(run, JournalEventTypeEnum.AFTER, outcome_value),
+        blind_brier=blind_brier,
     )
 
 
@@ -201,6 +207,7 @@ def _summarize(
     trades = [row for row in resolved_rows if row.trade_pnl is not None]
     user_before_briers = [row.user_before_brier for row in resolved_rows if row.user_before_brier is not None]
     user_after_briers = [row.user_after_brier for row in resolved_rows if row.user_after_brier is not None]
+    blind_briers = [row.blind_brier for row in resolved_rows if row.blind_brier is not None]
 
     model_wins = sum(1 for model, market in head_to_head if model < market)
     total_pnl = round(sum(row.trade_pnl for row in trades if row.trade_pnl is not None), 2)
@@ -230,6 +237,8 @@ def _summarize(
         avg_user_before_brier=_average(user_before_briers),
         user_after_runs=len(user_after_briers),
         avg_user_after_brier=_average(user_after_briers),
+        blind_runs=len(blind_briers),
+        avg_blind_brier=_average(blind_briers),
     )
 
 

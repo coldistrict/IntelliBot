@@ -95,6 +95,11 @@ class BriefDraft(BaseModel):
     why_wrong_summary: str
 
 
+class BlindProbabilityDraft(BaseModel):
+    p_yes: float = Field(ge=0.0, le=1.0)
+    rationale: str
+
+
 class TrustedSocialPostDraft(BaseModel):
     handle: str
     display_name: str

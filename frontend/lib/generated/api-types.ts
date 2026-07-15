@@ -551,6 +551,8 @@ export interface components {
         AnalysisRunResponse: {
             /** @default original */
             attempt_reason: components["schemas"]["AttemptReasonEnum"];
+            /** Blind P Hat */
+            blind_p_hat?: number | null;
             confidence_label: components["schemas"]["ConfidenceLabelEnum"];
             /**
              * Created At
@@ -1201,6 +1203,8 @@ export interface components {
         PricedInRiskLabelEnum: "low" | "medium" | "high";
         /** ProbabilityMathResponse */
         ProbabilityMathResponse: {
+            /** Blind P Hat */
+            blind_p_hat?: number | null;
             /** Capped Social Evidence */
             capped_social_evidence: number;
             /**
@@ -1441,6 +1445,8 @@ export interface components {
             analysis_request_id: number;
             /** Analysis Run Id */
             analysis_run_id: number;
+            /** Blind Brier */
+            blind_brier?: number | null;
             confidence_label: components["schemas"]["ConfidenceLabelEnum"] | null;
             /** Direction Hit */
             direction_hit: boolean | null;
@@ -1569,6 +1575,8 @@ export interface components {
         RunQualityEnum: "unknown" | "clean" | "warning" | "invalid";
         /** ScoreboardSummary */
         ScoreboardSummary: {
+            /** Avg Blind Brier */
+            avg_blind_brier?: number | null;
             /** Avg Market Brier */
             avg_market_brier: number | null;
             /** Avg Model Brier */
@@ -1577,6 +1585,11 @@ export interface components {
             avg_user_after_brier?: number | null;
             /** Avg User Before Brier */
             avg_user_before_brier?: number | null;
+            /**
+             * Blind Runs
+             * @default 0
+             */
+            blind_runs: number;
             /** Direction Calls */
             direction_calls: number;
             /** Direction Hit Rate */

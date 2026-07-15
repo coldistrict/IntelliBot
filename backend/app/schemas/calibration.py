@@ -28,6 +28,7 @@ class ResolvedRunRow(BaseModel):
     quality_state: RunQualityEnum = RunQualityEnum.UNKNOWN
     user_before_brier: float | None = None
     user_after_brier: float | None = None
+    blind_brier: float | None = None
 
 
 class PendingRunRow(BaseModel):
@@ -85,6 +86,8 @@ class ScoreboardSummary(BaseModel):
     avg_user_before_brier: float | None = None
     user_after_runs: int = 0
     avg_user_after_brier: float | None = None
+    blind_runs: int = 0
+    avg_blind_brier: float | None = None
 
 
 class CalibrationScoreboardResponse(BaseModel):

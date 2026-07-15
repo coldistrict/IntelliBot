@@ -207,6 +207,12 @@ export function AnalysisAuditDrawer({
                       <p>Total evidence: {audit.probability ? formatSigned(audit.probability.total_evidence) : "Unavailable"}</p>
                       <p>{audit.probability?.numeric_estimate_available ? "Approved p_hat" : "Model p_hat"}: {formatPercent(audit.probability?.p_hat)}</p>
                       <p>Model NO complement: {formatPercent(complementProbability(audit.probability?.p_hat))}</p>
+                      <p>
+                        Blind model read (no market shown):{" "}
+                        {audit.probability?.blind_p_hat !== null && audit.probability?.blind_p_hat !== undefined
+                          ? formatPercent(audit.probability.blind_p_hat)
+                          : "Unavailable"}
+                      </p>
                       {audit.probability?.price_history_signal?.reason ? (
                         <p>Market reaction: {String(audit.probability.price_history_signal.reason)}</p>
                       ) : null}
