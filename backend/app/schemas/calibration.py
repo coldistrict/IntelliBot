@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.models.enums import ConfidenceLabelEnum, RecommendationLabelEnum, TemplateKey
+from app.models.enums import ConfidenceLabelEnum, RecommendationLabelEnum, RunQualityEnum, TemplateKey
 
 
 class ResolvedRunRow(BaseModel):
@@ -24,6 +24,10 @@ class ResolvedRunRow(BaseModel):
     trade_side: str | None
     trade_entry_price: float | None
     trade_pnl: float | None
+    is_repeat: bool = False
+    quality_state: RunQualityEnum = RunQualityEnum.UNKNOWN
+    user_before_brier: float | None = None
+    user_after_brier: float | None = None
 
 
 class PendingRunRow(BaseModel):
@@ -33,6 +37,9 @@ class PendingRunRow(BaseModel):
     p_hat: float | None
     recommendation_label: RecommendationLabelEnum | None
     market_expiry_at: datetime | None
+    is_repeat: bool = False
+    quality_state: RunQualityEnum = RunQualityEnum.UNKNOWN
+    expired_unresolved: bool = False
 
 
 class CalibrationBucket(BaseModel):
@@ -70,6 +77,14 @@ class ScoreboardSummary(BaseModel):
     trade_wins: int
     total_pnl: float
     roi_per_trade: float | None
+    distinct_markets: int = 0
+    published_forecasts: int = 0
+    repeated_forecasts: int = 0
+    unknown_forecasts: int = 0
+    user_before_runs: int = 0
+    avg_user_before_brier: float | None = None
+    user_after_runs: int = 0
+    avg_user_after_brier: float | None = None
 
 
 class CalibrationScoreboardResponse(BaseModel):

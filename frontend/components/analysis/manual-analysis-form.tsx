@@ -3,7 +3,12 @@
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { createManualAnalysis, ManualAnalysisPayload } from "@/lib/api";
+import {
+  createManualAnalysis,
+  fetchMarketLinkCandidates,
+  ManualAnalysisPayload,
+  MarketLinkCandidate,
+} from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/ui/panel";
 
@@ -51,6 +56,10 @@ export function ManualAnalysisForm() {
   const [liveXTouched, setLiveXTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [candidates, setCandidates] = useState<MarketLinkCandidate[]>([]);
+  const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
+  const [candidateNote, setCandidateNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (!liveXTouched) {
@@ -68,6 +77,27 @@ export function ManualAnalysisForm() {
     return "Ask a direct claim, such as “Will the Fed cut rates by June?” or “Will SCOTUS strike this down?”";
   }, [inputMode]);
   const canSubmit = primaryValue.trim().length > 0 && !isSubmitting;
+
+  async function previewMatches() {
+    setIsPreviewing(true);
+    setCandidateNote(null);
+    try {
+      const result = await fetchMarketLinkCandidates(primaryValue.trim());
+      setCandidates(result.candidates);
+      setSelectedMarketId(result.auto_link ? (result.candidates[0]?.market_id ?? null) : null);
+      setCandidateNote(
+        result.candidates.length
+          ? result.auto_link
+            ? "High-confidence match found. Review it or choose another market before running."
+            : "No market is safe to link automatically. Select one only if it resolves the exact same proposition."
+          : "No plausible Polymarket candidates were found; the claim can run without a market prior.",
+      );
+    } catch (previewError) {
+      setCandidateNote(previewError instanceof Error ? previewError.message : "Unable to preview markets.");
+    } finally {
+      setIsPreviewing(false);
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -87,6 +117,9 @@ export function ManualAnalysisForm() {
     }
     if (inputMode === "custom_claim") {
       payload.custom_claim = primaryValue.trim();
+      if (selectedMarketId) {
+        payload.confirmed_polymarket_market_id = selectedMarketId;
+      }
     } else if (inputMode === "market_id") {
       payload.polymarket_market_id = primaryValue.trim();
     } else {
@@ -174,8 +207,8 @@ export function ManualAnalysisForm() {
                 <p className="text-xs uppercase tracking-[0.14em] text-ink/40">{primaryValue.trim().length} chars</p>
               </div>
               {inputMode === "custom_claim" ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {customClaimExamples.map((example) => (
+                <div className="mt-3 space-y-3">
+                  <div className="flex flex-wrap gap-2">{customClaimExamples.map((example) => (
                     <button
                       key={example}
                       type="button"
@@ -187,7 +220,41 @@ export function ManualAnalysisForm() {
                     >
                       {example}
                     </button>
-                  ))}
+                  ))}</div>
+                  <button
+                    type="button"
+                    onClick={() => void previewMatches()}
+                    disabled={primaryValue.trim().length < 5 || isPreviewing}
+                    className="secondary-action disabled:opacity-50"
+                  >
+                    {isPreviewing ? "Checking markets…" : "Preview market matches"}
+                  </button>
+                  {candidateNote ? <p className="text-sm leading-6 text-ink/60">{candidateNote}</p> : null}
+                  {candidates.length ? (
+                    <div className="space-y-2 rounded-lg border border-black/10 bg-white/70 p-3">
+                      <p className="section-label">Candidate markets</p>
+                      {candidates.map((candidate) => (
+                        <label key={candidate.market_id} className="flex cursor-pointer gap-3 border-t border-black/10 py-3 first:border-t-0">
+                          <input
+                            type="radio"
+                            name="confirmed-market"
+                            checked={selectedMarketId === candidate.market_id}
+                            onChange={() => setSelectedMarketId(candidate.market_id)}
+                            className="mt-1 h-4 w-4 accent-pine"
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-sm font-semibold text-ink">{candidate.title}</span>
+                            <span className="mt-1 block text-xs text-ink/55">
+                              {candidate.confidence} confidence · score {Math.round(candidate.score * 100)}% · {candidate.reason_codes.join(", ")}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                      <button type="button" className="quiet-action" onClick={() => setSelectedMarketId(null)}>
+                        Run without a linked market
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </label>

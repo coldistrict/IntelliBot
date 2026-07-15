@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   SocialIntelSummary,
@@ -10,6 +10,10 @@ import {
   PresentationEvidenceItem,
   ResearchEdgeSignal,
   Source,
+  JournalEvent,
+  fetchJournal,
+  saveAfterJournal,
+  saveBeforeJournal,
 } from "@/lib/api";
 import { AnalysisAuditDrawer } from "@/components/analysis/analysis-audit-drawer";
 import { useAnalysisDetail } from "@/components/analysis/use-analysis-detail";
@@ -360,6 +364,20 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
   const { detail, error, isRerunning, handleRerun, refreshDetail } = useAnalysisDetail(analysisId);
   const [isAuditOpen, setIsAuditOpen] = useState(false);
   const [auditFocus, setAuditFocus] = useState<AuditFocus | null>(null);
+  const [journalEvents, setJournalEvents] = useState<JournalEvent[]>([]);
+  const [journalError, setJournalError] = useState<string | null>(null);
+  const [beforeProbability, setBeforeProbability] = useState("50");
+  const [beforeAction, setBeforeAction] = useState<"yes" | "no" | "no_bet">("no_bet");
+  const [afterDecision, setAfterDecision] = useState<"yes" | "no" | "no_bet">("no_bet");
+  const [conviction, setConviction] = useState("3");
+  const [rationale, setRationale] = useState("");
+  const [whatChanged, setWhatChanged] = useState("");
+
+  useEffect(() => {
+    void fetchJournal(analysisId)
+      .then((payload) => setJournalEvents(payload.events))
+      .catch(() => undefined);
+  }, [analysisId, detail?.request.status]);
 
   const artifactStatusMap = useMemo(() => {
     const map = new Map<string, PresentationArtifactStatus>();
@@ -542,6 +560,37 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
     setAuditFocus(focus ?? null);
     setIsAuditOpen(true);
   };
+  const saveBefore = async () => {
+    setJournalError(null);
+    try {
+      const event = await saveBeforeJournal(analysisId, {
+        prior_probability: Number(beforeProbability) / 100,
+        intended_action: beforeAction,
+        entry_threshold: null,
+      });
+      setJournalEvents((current) => [...current, event]);
+    } catch (saveError) {
+      setJournalError(saveError instanceof Error ? saveError.message : "Unable to save journal entry.");
+    }
+  };
+  const saveAfter = async () => {
+    setJournalError(null);
+    try {
+      const event = await saveAfterJournal(analysisId, {
+        decision: afterDecision,
+        conviction: Number(conviction),
+        rationale,
+        what_changed: whatChanged,
+      });
+      setJournalEvents((current) => [...current, event]);
+      setRationale("");
+      setWhatChanged("");
+    } catch (saveError) {
+      setJournalError(saveError instanceof Error ? saveError.message : "Unable to save journal entry.");
+    }
+  };
+  const matchMetadata = (detail.latest_run?.market_match_json ?? {}) as Record<string, unknown>;
+  const originalClaim = typeof matchMetadata.original_claim === "string" ? matchMetadata.original_claim : detail.request.input_text;
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
@@ -572,15 +621,33 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
                 priced-in {humanizeLabel(detail.latest_run.priced_in_risk_label)}
               </Badge>
             ) : null}
+            <Badge variant={detail.request.quality_state === "clean" ? "yes" : detail.request.quality_state === "invalid" ? "no" : "warning"}>
+              quality {detail.request.quality_state ?? "unknown"}
+            </Badge>
+            {detail.request.market_match_confidence ? (
+              <Badge variant="muted">match {humanizeLabel(detail.request.market_match_confidence)}</Badge>
+            ) : null}
           </div>
           <h1 className="mt-4 max-w-5xl font-serif text-3xl leading-[1.06] text-ink sm:text-4xl">
             {detail.presentation.headline}
           </h1>
           <p className="mt-3 max-w-4xl text-base leading-7 text-ink/70">{detail.presentation.thesis}</p>
           <p className="mt-2 max-w-4xl text-sm leading-6 text-ink/60">{detail.presentation.status_note}</p>
+          {detail.market && originalClaim !== detail.market.title ? (
+            <div className="mt-4 max-w-4xl rounded-lg border border-black/10 bg-white/70 p-4 text-sm leading-6 text-ink/65">
+              <p><span className="font-semibold text-ink">Original claim:</span> {originalClaim}</p>
+              <p className="mt-1"><span className="font-semibold text-ink">Linked market:</span> {detail.market.title}</p>
+            </div>
+          ) : null}
+          {(detail.request.quality_reasons ?? []).length ? (
+            <p className="mt-3 max-w-4xl text-sm leading-6 text-ember">
+              Run note: {(detail.request.quality_reasons ?? []).map((reason) => String(reason.code ?? "quality warning").replaceAll("_", " ")).join(" · ")}
+            </p>
+          ) : null}
           <div className="mt-4 flex flex-wrap gap-4 text-sm text-ink/60">
             <span>Last updated {formatDate(lastUpdated)}</span>
             <span>Elapsed {formatElapsed(displayedStartedAt, detail.request.completed_at)}</span>
+            <span>Estimated model cost ${(detail.request.estimated_cost_usd ?? 0).toFixed(4)}</span>
             {detail.progress.current_label ? <span>Current stage: {detail.progress.current_label}</span> : null}
           </div>
           {isRunning || isFailed ? (
@@ -676,13 +743,13 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
                   <p
                     className={cn(
                       "mt-2 font-serif text-4xl font-medium leading-none tracking-[-0.01em] lining-nums tabular-nums",
-                      edgeTone((detail.latest_run?.p_hat ?? 0) - marketPrior),
+                      edgeTone(detail.latest_run?.evidence_update ?? ((detail.latest_run?.p_hat ?? 0) - marketPrior)),
                     )}
                   >
-                    {formatEdgePoints((detail.latest_run?.p_hat ?? 0) - marketPrior)}
+                    {formatEdgePoints(detail.latest_run?.evidence_update ?? ((detail.latest_run?.p_hat ?? 0) - marketPrior))}
                   </p>
                   <p className="mt-2 text-sm leading-6 text-ink/60">
-                    {edgeNote((detail.latest_run?.p_hat ?? 0) - marketPrior)}
+                    Prior → retained evidence → final forecast. {edgeNote(detail.latest_run?.evidence_update ?? ((detail.latest_run?.p_hat ?? 0) - marketPrior))}
                   </p>
                 </div>
                 <div>
@@ -955,6 +1022,43 @@ export function AnalysisDetailClient({ analysisId }: AnalysisDetailClientProps) 
       </div>
 
       <aside className="min-w-0 space-y-5 break-words xl:sticky xl:top-24 xl:self-start">
+        <Panel className="space-y-4 p-4">
+          <div className="border-b border-black/10 pb-3">
+            <p className="section-label">Decision journal</p>
+            <p className="mt-2 text-sm leading-6 text-ink/60">Capture your view before research, then record the decision after the immutable forecast publishes.</p>
+          </div>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-xs font-semibold text-ink/60">Prior %
+                <input className="field-control mt-1" type="number" min="0" max="100" value={beforeProbability} onChange={(event) => setBeforeProbability(event.target.value)} />
+              </label>
+              <label className="text-xs font-semibold text-ink/60">Intent
+                <select className="field-control mt-1" value={beforeAction} onChange={(event) => setBeforeAction(event.target.value as typeof beforeAction)}>
+                  <option value="no_bet">No bet</option><option value="yes">YES</option><option value="no">NO</option>
+                </select>
+              </label>
+            </div>
+            <button type="button" onClick={() => void saveBefore()} className="secondary-action w-full">Save before view</button>
+            {!isRunning ? (
+              <div className="space-y-2 border-t border-black/10 pt-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <select aria-label="Final decision" className="field-control" value={afterDecision} onChange={(event) => setAfterDecision(event.target.value as typeof afterDecision)}>
+                    <option value="no_bet">No bet</option><option value="yes">YES</option><option value="no">NO</option>
+                  </select>
+                  <select aria-label="Conviction" className="field-control" value={conviction} onChange={(event) => setConviction(event.target.value)}>
+                    {[1,2,3,4,5].map((value) => <option key={value} value={value}>Conviction {value}</option>)}
+                  </select>
+                </div>
+                <textarea aria-label="Decision rationale" className="field-control" placeholder="Why this decision?" value={rationale} onChange={(event) => setRationale(event.target.value)} />
+                <textarea aria-label="What changed" className="field-control" placeholder="What changed after research?" value={whatChanged} onChange={(event) => setWhatChanged(event.target.value)} />
+                <button type="button" disabled={!rationale.trim()} onClick={() => void saveAfter()} className="secondary-action w-full disabled:opacity-50">Save after decision</button>
+              </div>
+            ) : null}
+            <p className="text-xs text-ink/50">{journalEvents.length} event{journalEvents.length === 1 ? "" : "s"} recorded</p>
+            {journalError ? <p role="alert" className="text-xs leading-5 text-ember">{journalError}</p> : null}
+          </div>
+        </Panel>
+
         <Panel className="space-y-4 p-4">
           <div className="border-b border-black/10 pb-3">
             <p className="section-label">Actions</p>

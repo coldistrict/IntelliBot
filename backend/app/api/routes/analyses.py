@@ -6,16 +6,19 @@ from sqlalchemy.orm import Session, selectinload
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.db.session import get_db_session
-from app.models import AnalysisRequest, AnalysisRun, Market, Review, RuleParse
+from app.models import AnalysisRequest, AnalysisRun, JournalEvent, Market, Review, RuleParse
 from app.models.enums import (
     InputTypeEnum,
+    JournalEventTypeEnum,
     ModeEnum,
     RequestStatusEnum,
+    RunQualityEnum,
     SourceKindEnum,
     TemplateKey,
 )
 from app.schemas.analysis import (
     AnalysisAuditResponse,
+    AnalysisLedgerResponse,
     AnalysisDetailResponse,
     AnalysisListResponse,
     AnalysisProgressResponse,
@@ -24,11 +27,17 @@ from app.schemas.analysis import (
     AnalysisProgressPresentationResponse,
     AnalysisQueuedResponse,
     AnalysisRequestSummary,
+    ExecutionEventResponse,
+    ExecutionTotalsResponse,
     AutoScanRunRequest,
     DocumentResponse,
     FactorResponse,
     FactClaimResponse,
     ManualAnalysisCreateRequest,
+    JournalAfterRequest,
+    JournalBeforeRequest,
+    JournalEventResponse,
+    JournalResponse,
     PassageResponse,
     RecommendationResponse,
     ReviewCreateRequest,
@@ -114,6 +123,8 @@ def _build_summary(request: AnalysisRequest) -> AnalysisRequestSummary:
     review_count = len(active_run.reviews) if active_run else 0
     progress = build_progress_snapshot(request)
     display_summary = build_display_summary(request, analysis_run=active_run)
+    execution_events = active_run.execution_events if active_run else []
+    journal_events = active_run.journal_events if active_run else []
 
     return AnalysisRequestSummary.model_validate(request).model_copy(
         update={
@@ -128,6 +139,15 @@ def _build_summary(request: AnalysisRequest) -> AnalysisRequestSummary:
             "current_stage_note": progress["current_note"],
             "display_summary": display_summary,
             "qualitative_label": active_run.qualitative_label if active_run else None,
+            "quality_state": active_run.quality_state if active_run else RunQualityEnum.UNKNOWN,
+            "quality_reasons": active_run.quality_reasons if active_run else [],
+            "journal_event_count": len(journal_events),
+            "estimated_cost_usd": round(
+                sum(event.estimated_cost_usd for event in execution_events), 8
+            ),
+            "market_match_confidence": (
+                (active_run.market_match_json or {}).get("confidence") if active_run else None
+            ),
         },
     )
 
@@ -140,6 +160,7 @@ def _manual_input_payload(submission: ManualAnalysisCreateRequest) -> dict:
         "deadline_text": submission.deadline_text,
         "include_premium": submission.include_premium,
         "include_live_x_intelligence": submission.include_live_x_intelligence,
+        "confirmed_polymarket_market_id": submission.confirmed_polymarket_market_id,
     }
 
 
@@ -259,6 +280,8 @@ def list_analyses(
         select(AnalysisRequest)
         .options(
             selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.reviews),
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.execution_events),
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.journal_events),
             selectinload(AnalysisRequest.market),
         )
         .order_by(AnalysisRequest.created_at.desc(), AnalysisRequest.id.desc())
@@ -272,8 +295,18 @@ def list_analyses(
         items_query = items_query.join(Market, market_filter[0]).where(market_filter[1])
 
     total = session.scalar(count_query) or 0
+    status_query = select(AnalysisRequest.status, func.count()).group_by(AnalysisRequest.status)
+    if polymarket_id is not None:
+        status_query = status_query.join(Market, AnalysisRequest.market_id == Market.id).where(
+            Market.polymarket_id == polymarket_id
+        )
+    status_counts = {status.value: count for status, count in session.execute(status_query).all()}
     items = session.scalars(items_query.limit(limit).offset(offset)).all()
-    return AnalysisListResponse(items=[_build_summary(item) for item in items], total=total)
+    return AnalysisListResponse(
+        items=[_build_summary(item) for item in items],
+        total=total,
+        status_counts=status_counts,
+    )
 
 
 @router.get("/{analysis_id}", response_model=AnalysisDetailResponse)
@@ -295,6 +328,8 @@ def get_analysis_detail(
             selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.passages),
             selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.fact_claims),
             selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.factors),
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.execution_events),
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.journal_events),
         )
     )
     if request is None:
@@ -444,6 +479,104 @@ def get_analysis_progress(
         ),
         last_updated_at=request.updated_at,
     )
+
+
+@router.get("/{analysis_id}/ledger", response_model=AnalysisLedgerResponse)
+def get_analysis_ledger(
+    analysis_id: int,
+    session: Session = Depends(get_db_session),
+) -> AnalysisLedgerResponse:
+    request = session.scalar(
+        select(AnalysisRequest)
+        .where(AnalysisRequest.id == analysis_id)
+        .options(
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.execution_events)
+        )
+    )
+    if request is None:
+        raise HTTPException(status_code=404, detail="Analysis request not found.")
+    run = _current_run(request) or _latest_run(request)
+    events = sorted(run.execution_events, key=lambda event: (event.created_at, event.id)) if run else []
+    stages = [event for event in events if event.event_kind == "stage"]
+    calls = [event for event in events if event.event_kind != "stage"]
+    return AnalysisLedgerResponse(
+        stages=[ExecutionEventResponse.model_validate(event) for event in stages],
+        calls=[ExecutionEventResponse.model_validate(event) for event in calls],
+        run_quality=run.quality_state if run else RunQualityEnum.UNKNOWN,
+        quality_reasons=run.quality_reasons if run else [],
+        totals=ExecutionTotalsResponse(
+            calls=len([event for event in calls if event.event_kind == "model_call"]),
+            cache_hits=sum(1 for event in calls if event.cache_hit),
+            tokens=sum(event.prompt_tokens + event.completion_tokens for event in calls),
+            estimated_cost_usd=round(sum(event.estimated_cost_usd for event in calls), 8),
+        ),
+    )
+
+
+def _request_for_journal(session: Session, analysis_id: int) -> tuple[AnalysisRequest, AnalysisRun]:
+    request = session.scalar(
+        select(AnalysisRequest)
+        .where(AnalysisRequest.id == analysis_id)
+        .options(
+            selectinload(AnalysisRequest.analysis_runs).selectinload(AnalysisRun.journal_events)
+        )
+    )
+    if request is None:
+        raise HTTPException(status_code=404, detail="Analysis request not found.")
+    run = _current_run(request) or _latest_run(request)
+    if run is None:
+        raise HTTPException(status_code=409, detail="Analysis run has not started yet.")
+    return request, run
+
+
+@router.post("/{analysis_id}/journal/before", response_model=JournalEventResponse)
+def journal_before(
+    analysis_id: int,
+    payload: JournalBeforeRequest,
+    session: Session = Depends(get_db_session),
+) -> JournalEventResponse:
+    _, run = _request_for_journal(session, analysis_id)
+    event = JournalEvent(
+        analysis_run_id=run.id,
+        event_type=JournalEventTypeEnum.BEFORE,
+        payload_json=payload.model_dump(mode="json"),
+        created_at=datetime.now(UTC),
+    )
+    session.add(event)
+    session.commit()
+    session.refresh(event)
+    return JournalEventResponse.model_validate(event)
+
+
+@router.post("/{analysis_id}/journal/after", response_model=JournalEventResponse)
+def journal_after(
+    analysis_id: int,
+    payload: JournalAfterRequest,
+    session: Session = Depends(get_db_session),
+) -> JournalEventResponse:
+    request, run = _request_for_journal(session, analysis_id)
+    if request.status != RequestStatusEnum.COMPLETE or run.published_forecast is None:
+        raise HTTPException(status_code=409, detail="A published forecast is required first.")
+    event = JournalEvent(
+        analysis_run_id=run.id,
+        event_type=JournalEventTypeEnum.AFTER,
+        payload_json=payload.model_dump(mode="json"),
+        created_at=datetime.now(UTC),
+    )
+    session.add(event)
+    session.commit()
+    session.refresh(event)
+    return JournalEventResponse.model_validate(event)
+
+
+@router.get("/{analysis_id}/journal", response_model=JournalResponse)
+def get_journal(
+    analysis_id: int,
+    session: Session = Depends(get_db_session),
+) -> JournalResponse:
+    _, run = _request_for_journal(session, analysis_id)
+    events = sorted(run.journal_events, key=lambda event: (event.created_at, event.id))
+    return JournalResponse(events=[JournalEventResponse.model_validate(event) for event in events])
 
 
 @router.post("/{analysis_id}/review", response_model=ReviewResponse)

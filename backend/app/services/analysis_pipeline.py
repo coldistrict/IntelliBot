@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.clients.openai_client import get_openai_client
+from app.clients.fred_client import FredClient
 from app.clients.polymarket_client import PolymarketClient, ResolvedMarketRecord
 from app.clients.tavily_client import TavilyClient
 from app.clients.xai_client import get_xai_client
@@ -28,12 +29,14 @@ from app.models import (
     FactClaim,
     Factor,
     Market,
+    MarketPricePoint,
     Passage,
     RuleParse,
     SocialIntelSummary,
     Source,
 )
 from app.models.enums import (
+    AttemptReasonEnum,
     ClaimTypeEnum,
     ClaimFamilyEnum,
     ConfidenceLabelEnum,
@@ -54,6 +57,13 @@ from app.models.enums import (
     TemplateKey,
     VerifierStatusEnum,
 )
+from app.services.analysis_execution import (
+    bind_analysis_run,
+    execution_context,
+    record_execution_event,
+    record_fallback,
+)
+from app.models.enums import ExecutionResultModeEnum
 from app.services.pipeline_models import (
     BriefDraft,
     EvidenceAdjudicationDraft,
@@ -98,6 +108,9 @@ from app.services.analysis_progress import (
     mark_stage_skipped,
 )
 from app.services.prompt_loader import load_prompt
+from app.services.market_matching import assess_market_match
+from app.services.deadline_policy import deadline_uncertainty_adjustment
+from app.services.retrieval_lanes import FredRetrievalLane, RetrievalLane
 
 logger = logging.getLogger(__name__)
 
@@ -687,6 +700,7 @@ class ScoreOutcome:
     numeric_estimate_available: bool
     numeric_estimate_reason: str | None
     qualitative_label: QualitativeLabelEnum | None
+    price_history_signal: dict[str, Any] = field(default_factory=dict)
 
 
 class AnalysisProcessor:
@@ -699,6 +713,8 @@ class AnalysisProcessor:
         xai_client: Any | None = None,
         tavily_client: TavilyClient | None = None,
         polymarket_client: PolymarketClient | None = None,
+        fred_client: FredClient | None = None,
+        retrieval_lanes: list[RetrievalLane] | None = None,
     ) -> None:
         self.session_factory = session_factory or get_session_factory()
         self.enable_remote_calls = enable_remote_calls
@@ -706,8 +722,14 @@ class AnalysisProcessor:
         self.xai_client = xai_client or get_xai_client(enabled=enable_remote_calls)
         self.tavily_client = tavily_client or TavilyClient(enabled=enable_remote_calls)
         self.polymarket_client = polymarket_client or PolymarketClient(enabled=enable_remote_calls)
+        self.fred_client = fred_client or FredClient(enabled=enable_remote_calls)
+        self.retrieval_lanes = retrieval_lanes or [FredRetrievalLane(self.fred_client)]
 
     def process_request(self, request_id: int) -> None:
+        with execution_context(request_id):
+            self._process_request_with_context(request_id)
+
+    def _process_request_with_context(self, request_id: int) -> None:
         try:
             with self.session_factory() as session:
                 request = session.get(AnalysisRequest, request_id)
@@ -807,6 +829,7 @@ class AnalysisProcessor:
         if request.market_id:
             market = session.get(Market, request.market_id)
             if market is not None:
+                self._refresh_price_history(session, market)
                 mark_stage_skipped(
                     request,
                     "market_lookup",
@@ -830,7 +853,10 @@ class AnalysisProcessor:
         session.commit()
 
         resolved_market: ResolvedMarketRecord | None = None
-        if request.input_type == InputTypeEnum.CUSTOM_CLAIM:
+        confirmed_market_id = (request.input_payload or {}).get("confirmed_polymarket_market_id")
+        if request.input_type == InputTypeEnum.CUSTOM_CLAIM and confirmed_market_id:
+            resolved_market = self.polymarket_client.get_market_by_id(str(confirmed_market_id))
+        elif request.input_type == InputTypeEnum.CUSTOM_CLAIM:
             resolved_market = self._find_matching_market_for_claim(session, request.input_text)
         elif request.input_type == InputTypeEnum.MARKET_ID:
             resolved_market = self.polymarket_client.get_market_by_id(request.input_text)
@@ -872,6 +898,9 @@ class AnalysisProcessor:
         market.spread = resolved_market.spread
         market.expiry_at = resolved_market.expiry_at
         market.status = resolved_market.status
+        market.yes_token_id = resolved_market.yes_token_id
+        market.no_token_id = resolved_market.no_token_id
+        self._refresh_price_history(session, market)
         request.market_id = market.id
         session.add_all([market, request])
         mark_stage_complete(
@@ -908,14 +937,9 @@ class AnalysisProcessor:
             seen_ids.add(candidate.polymarket_id)
             if candidate.status == "closed":
                 continue
-            score = self._market_match_score(
-                claim,
-                title=candidate.title,
-                description=candidate.description,
-                rules_text=candidate.rules_text,
-            )
-            if score >= MARKET_MATCH_MIN_SCORE:
-                ranked.append((score, candidate))
+            assessment = assess_market_match(claim, candidate)
+            if assessment.auto_link:
+                ranked.append((assessment.score, candidate))
 
         if not ranked:
             return None
@@ -946,7 +970,49 @@ class AnalysisProcessor:
             spread=market.spread,
             expiry_at=market.expiry_at,
             status=market.status,
+            yes_token_id=market.yes_token_id,
+            no_token_id=market.no_token_id,
         )
+
+    def _refresh_price_history(self, session: Session, market: Market) -> None:
+        if not self.enable_remote_calls or not market.id:
+            return
+        existing = {
+            (point.token_id, point.observed_at)
+            for point in session.scalars(
+                select(MarketPricePoint).where(MarketPricePoint.market_id == market.id)
+            ).all()
+        }
+        added = 0
+        for outcome, token_id in (("yes", market.yes_token_id), ("no", market.no_token_id)):
+            if not token_id:
+                continue
+            for point in self.polymarket_client.get_price_history(token_id)[-500:]:
+                if (token_id, point.observed_at) in existing:
+                    continue
+                session.add(
+                    MarketPricePoint(
+                        market_id=market.id,
+                        token_id=token_id,
+                        outcome=outcome,
+                        price=point.price,
+                        observed_at=point.observed_at,
+                        fetched_at=datetime.now(UTC),
+                    )
+                )
+                existing.add((token_id, point.observed_at))
+                added += 1
+        record_execution_event(
+            session,
+            stage_key="market_lookup",
+            event_kind="price_history",
+            result_mode=(
+                ExecutionResultModeEnum.MODEL if added else ExecutionResultModeEnum.SKIPPED
+            ),
+            provider="polymarket_clob",
+            detail={"market_id": market.polymarket_id, "points_added": added},
+        )
+        session.flush()
 
     @classmethod
     def _market_match_score(
@@ -1008,6 +1074,7 @@ class AnalysisProcessor:
         session.add(request)
         session.commit()
 
+        fallback_error: Exception | None = None
         if self.openai_client.is_configured:
             try:
                 return self.openai_client.generate_structured(
@@ -1018,8 +1085,17 @@ class AnalysisProcessor:
                     user_prompt=prompt,
                     schema_model=RuleParseDraft,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                fallback_error = exc
+                logger.exception("OpenAI rule parse failed; using deterministic fallback.")
+
+        record_fallback(
+            session,
+            task_name="rule_parse",
+            provider="openai",
+            model=getattr(self.openai_client, "model", None),
+            error=fallback_error,
+        )
 
         return self._fallback_rule_parse(request, market)
 
@@ -1042,6 +1118,13 @@ class AnalysisProcessor:
             no_condition=rule_parse.no_condition,
             deadline_text=rule_parse.deadline_text,
             deadline_utc=rule_parse.deadline_utc,
+            deadline_provenance={
+                "source": (
+                    "model_parse" if self.openai_client.is_configured else "deterministic_fallback"
+                ),
+                "input_deadline": (request.input_payload or {}).get("deadline_text"),
+                "market_expiry": market.expiry_at.isoformat() if market and market.expiry_at else None,
+            },
             timezone_text=rule_parse.timezone_text,
             resolution_definition=rule_parse.resolution_definition,
             directional_scoring_policy=rule_parse.directional_scoring_policy,
@@ -1082,6 +1165,29 @@ class AnalysisProcessor:
             if market is None or market.yes_ask is None or market.no_ask is None
             else RecommendationLabelEnum.NEEDS_MORE_RESEARCH
         )
+        prior_run_exists = session.scalar(
+            select(AnalysisRun.id).where(AnalysisRun.request_id == request.id).limit(1)
+        ) is not None
+        market_match_json: dict[str, Any] = {
+            "original_claim": request.input_text,
+            "linked_market_id": market.polymarket_id if market else None,
+            "linked_market_title": market.title if market else None,
+        }
+        if request.input_type == InputTypeEnum.CUSTOM_CLAIM and market is not None:
+            assessment = assess_market_match(request.input_text, self._resolved_record_from_market(market))
+            market_match_json.update(
+                {
+                    "score": assessment.score,
+                    "confidence": (
+                        "confirmed"
+                        if (request.input_payload or {}).get("confirmed_polymarket_market_id")
+                        else assessment.confidence
+                    ),
+                    "reason_codes": assessment.reason_codes,
+                }
+            )
+        elif market is not None:
+            market_match_json["confidence"] = "exact_identifier"
         run = AnalysisRun(
             request_id=request.id,
             market_id=market.id if market else None,
@@ -1099,11 +1205,19 @@ class AnalysisProcessor:
             p_high=None,
             confidence_label=ConfidenceLabelEnum.LOW,
             recommendation_label=recommendation_label,
+            attempt_reason=(
+                AttemptReasonEnum.INTENTIONAL_RERUN
+                if prior_run_exists
+                else AttemptReasonEnum.ORIGINAL
+            ),
+            market_match_json=market_match_json,
             created_at=datetime.now(UTC),
         )
         session.add(run)
         session.commit()
         session.refresh(run)
+        bind_analysis_run(session, run.id)
+        session.commit()
         return run
 
     def _retrieve_sources(
@@ -1140,6 +1254,7 @@ class AnalysisProcessor:
                 canonical_url=None,
                 is_paywalled=False,
                 metadata_json={"input_context_only": True},
+                lane="manual",
                 created_at=now,
             )
             session.add(source)
@@ -1161,6 +1276,7 @@ class AnalysisProcessor:
                 canonical_url=market.url,
                 is_paywalled=False,
                 metadata_json={"market_source": True},
+                lane="market",
                 created_at=now,
             )
             session.add(source)
@@ -1185,7 +1301,38 @@ class AnalysisProcessor:
             session.commit()
 
         search_results = self._search_results_for_rule_parse(rule_parse)
-        for result in search_results:
+        lane_results: list[tuple[str, SearchSourceDraft]] = []
+        if rule_parse.template_detected == TemplateKey.MACRO_POLICY:
+            for lane in self.retrieval_lanes:
+                try:
+                    result = lane.retrieve(rule_parse)
+                except Exception as exc:
+                    record_execution_event(
+                        session,
+                        stage_key="retrieval",
+                        event_kind="retrieval_lane",
+                        result_mode=ExecutionResultModeEnum.FAILED,
+                        provider=lane.name,
+                        task_name=lane.name,
+                        error_class=type(exc).__name__,
+                    )
+                    continue
+                lane_results.extend((result.lane, item) for item in result.sources)
+                record_execution_event(
+                    session,
+                    stage_key="retrieval",
+                    event_kind="retrieval_lane",
+                    result_mode=(
+                        ExecutionResultModeEnum.MODEL
+                        if result.sources
+                        else ExecutionResultModeEnum.SKIPPED
+                    ),
+                    provider=result.lane,
+                    task_name=result.lane,
+                    detail={"source_count": len(result.sources)},
+                )
+        search_results_with_lanes = [("tavily", result) for result in search_results] + lane_results
+        for lane_name, result in search_results_with_lanes:
             if not self._should_include_search_result(request, result):
                 continue
             source_tier = result.source_tier
@@ -1212,6 +1359,7 @@ class AnalysisProcessor:
                 canonical_url=result.url,
                 is_paywalled=result.is_paywalled,
                 metadata_json=result.metadata_json,
+                lane=lane_name,
                 created_at=now,
             )
             session.add(source)
@@ -1419,6 +1567,22 @@ class AnalysisProcessor:
         grounded_contexts: list[SourceContext] = []
         for context in contexts:
             document_text, extractor = self._build_grounded_document_text(context.source)
+            contamination_reason = self._contamination_reason(document_text)
+            if contamination_reason:
+                context.source.exclusion_reason = contamination_reason
+                session.add(context.source)
+                record_execution_event(
+                    session,
+                    stage_key="retrieval",
+                    event_kind="source_gate",
+                    result_mode=ExecutionResultModeEnum.SKIPPED,
+                    detail={
+                        "source_id": context.source.id,
+                        "lane": context.source.lane,
+                        "reason": contamination_reason,
+                    },
+                )
+                continue
             document = Document(
                 analysis_run_id=analysis_run.id,
                 source_id=context.source.id,
@@ -1440,6 +1604,23 @@ class AnalysisProcessor:
                 source=context.source,
                 document_text=document_text,
             )
+            if not ranked_passages or max(score for _, score in ranked_passages) <= 0:
+                context.source.exclusion_reason = "zero_relevance"
+                session.add(context.source)
+                record_execution_event(
+                    session,
+                    stage_key="retrieval",
+                    event_kind="source_gate",
+                    result_mode=ExecutionResultModeEnum.SKIPPED,
+                    detail={
+                        "source_id": context.source.id,
+                        "lane": context.source.lane,
+                        "reason": "zero_relevance",
+                    },
+                )
+                session.delete(document)
+                session.flush()
+                continue
             passages: list[Passage] = []
             for passage_index, (passage_text, relevance_score) in enumerate(
                 ranked_passages,
@@ -1464,6 +1645,22 @@ class AnalysisProcessor:
 
         session.commit()
         return grounded_contexts
+
+    @staticmethod
+    def _contamination_reason(text: str) -> str | None:
+        normalized = " ".join(text.lower().split())
+        markers = {
+            "captcha": "captcha_or_bot_block",
+            "you are a bot": "captcha_or_bot_block",
+            "usted es un bot": "captcha_or_bot_block",
+            "access denied": "access_denied",
+            "enable javascript and cookies": "bot_block",
+            "cloudflare ray id": "bot_block",
+        }
+        for marker, reason in markers.items():
+            if marker in normalized:
+                return reason
+        return None
 
     def _build_grounded_document_text(self, source: Source) -> tuple[str, str]:
         raw_text = (
@@ -1987,7 +2184,9 @@ class AnalysisProcessor:
         crowd_signal = crowd_signal_modifier(social_intel_summary)
         evidence = max(min(factor_evidence + crowd_signal.evidence_delta, 2.5), -2.5)
 
-        priced_in_risk = self._priced_in_risk(market, source_contexts, social_intel_summary)
+        priced_in_risk, price_history_signal = self._priced_in_risk(
+            market, source_contexts, social_intel_summary
+        )
         uncertainty = BASE_UNCERTAINTY[rule_parse.template_detected]
         uncertainty += max(0.0, 0.9 - rule_parse.clarity_score) * 0.12
         uncertainty += rule_parse.resolution_risk * 0.15
@@ -2010,6 +2209,11 @@ class AnalysisProcessor:
         if self._has_contradictory_factors(factors):
             uncertainty += 0.05
         uncertainty += self._social_uncertainty_adjustment(social_intel_summary)
+        horizon_adjustment = deadline_uncertainty_adjustment(
+            getattr(rule_parse, "deadline_utc", None) or (market.expiry_at if market else None)
+        )
+        if horizon_adjustment:
+            uncertainty += float(horizon_adjustment["amount"])
         uncertainty = min(max(uncertainty, 0.05), 0.40)
 
         raw_p_hat = self._sigmoid(self._logit(prior) + evidence)
@@ -2054,6 +2258,7 @@ class AnalysisProcessor:
             numeric_estimate_available=numeric_estimate_available,
             numeric_estimate_reason=numeric_estimate_reason,
             qualitative_label=qualitative_label,
+            price_history_signal=price_history_signal,
         )
 
     def _build_brief(
@@ -2112,6 +2317,7 @@ class AnalysisProcessor:
             ]
         )
 
+        fallback_error: Exception | None = None
         if self.openai_client.is_configured:
             prompt = load_prompt("final_brief_v1.txt").replace("{{context}}", context)
             try:
@@ -2124,8 +2330,17 @@ class AnalysisProcessor:
                     schema_model=BriefDraft,
                     temperature=0.2,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                fallback_error = exc
+                logger.exception("OpenAI final brief failed; using deterministic fallback.")
+
+        record_fallback(
+            session,
+            task_name="final_brief",
+            provider="openai",
+            model=getattr(self.openai_client, "model", None),
+            error=fallback_error,
+        )
 
         crowd_signal = crowd_signal_modifier(social_intel_summary)
 
@@ -2175,6 +2390,7 @@ class AnalysisProcessor:
         session: Session,
         rule_parse: RuleParse,
     ) -> SocialIntelDraft:
+        fallback_error: Exception | None = None
         if self.xai_client.is_configured:
             playbook_context = self._social_playbook_context(rule_parse)
             prompt = load_prompt("social_intelligence_v1.txt").replace(
@@ -2202,8 +2418,17 @@ class AnalysisProcessor:
                     schema_model=SocialIntelDraft,
                     tools=self._social_tools_for_template(rule_parse),
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                fallback_error = exc
+                logger.exception("xAI social intelligence failed; using deterministic fallback.")
+
+        record_fallback(
+            session,
+            task_name="social_intelligence",
+            provider="xai",
+            model=getattr(self.xai_client, "model", None),
+            error=fallback_error,
+        )
 
         return self._fallback_social_intelligence(rule_parse)
 
@@ -2226,6 +2451,7 @@ class AnalysisProcessor:
             ]
         )
 
+        fallback_error: Exception | None = None
         if self.openai_client.is_configured and len(grounded_context) > 80:
             prompt = load_prompt("fact_extract_v1.txt").replace("{{context}}", context)
             try:
@@ -2238,8 +2464,17 @@ class AnalysisProcessor:
                     schema_model=FactExtractionResult,
                 )
                 return result.facts[:5]
-            except Exception:
-                pass
+            except Exception as exc:
+                fallback_error = exc
+                logger.exception("OpenAI fact extraction failed; using deterministic fallback.")
+
+        record_fallback(
+            session,
+            task_name="fact_extract",
+            provider="openai",
+            model=getattr(self.openai_client, "model", None),
+            error=fallback_error,
+        )
 
         return self._fallback_fact_extraction(source_context, rule_parse.question_text)
 
@@ -2265,6 +2500,7 @@ class AnalysisProcessor:
                 f"grounded_passage: {matched_passage.text if matched_passage else self._passage_context_text(source_context)}",
             ]
         )
+        fallback_error: Exception | None = None
         if self.openai_client.is_configured and len(context) > 120:
             prompt = load_prompt("fact_verify_v1.txt").replace("{{context}}", context)
             try:
@@ -2276,8 +2512,17 @@ class AnalysisProcessor:
                     user_prompt=prompt,
                     schema_model=VerifiedFactDraft,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                fallback_error = exc
+                logger.exception("OpenAI fact verification failed; using deterministic fallback.")
+
+        record_fallback(
+            session,
+            task_name="fact_verify",
+            provider="openai",
+            model=getattr(self.openai_client, "model", None),
+            error=fallback_error,
+        )
 
         return self._fallback_fact_verification(source_context, fact)
 
@@ -2302,6 +2547,7 @@ class AnalysisProcessor:
                 f"verification: {fact.verifier_status.value}",
             ]
         )
+        fallback_error: Exception | None = None
         if self.openai_client.is_configured and len(source.excerpt) > 80:
             prompt = load_prompt("evidence_role_v1.txt").replace("{{context}}", context)
             try:
@@ -2313,8 +2559,17 @@ class AnalysisProcessor:
                     user_prompt=prompt,
                     schema_model=EvidenceRoleDraft,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                fallback_error = exc
+                logger.exception("OpenAI evidence role failed; using deterministic fallback.")
+
+        record_fallback(
+            session,
+            task_name="evidence_role",
+            provider="openai",
+            model=getattr(self.openai_client, "model", None),
+            error=fallback_error,
+        )
 
         return self._fallback_evidence_role(rule_parse, source, fact)
 
@@ -3775,12 +4030,16 @@ class AnalysisProcessor:
         market: Market | None,
         source_contexts: list[SourceContext],
         social_intel_summary: SocialIntelSummary | None,
-    ) -> PricedInRiskLabelEnum:
+    ) -> tuple[PricedInRiskLabelEnum, dict[str, Any]]:
         if social_intel_summary is not None:
             if social_intel_summary.narrative_phase == NarrativePhaseEnum.PRICED_IN:
-                return PricedInRiskLabelEnum.HIGH
+                return PricedInRiskLabelEnum.HIGH, {"basis": "social_narrative", "attributed": True}
             if social_intel_summary.narrative_phase == NarrativePhaseEnum.CROWDED:
-                return PricedInRiskLabelEnum.MEDIUM
+                return PricedInRiskLabelEnum.MEDIUM, {"basis": "social_narrative", "attributed": True}
+
+        history_signal = self._price_history_signal(market, source_contexts)
+        if history_signal:
+            return PricedInRiskLabelEnum(history_signal["risk"]), history_signal
 
         published_times = [
             source_context.source.published_at or source_context.source.fetched_at
@@ -3788,17 +4047,58 @@ class AnalysisProcessor:
             if source_context.source.source_kind != SourceKindEnum.MANUAL_INPUT
         ]
         if not published_times:
-            return PricedInRiskLabelEnum.MEDIUM
+            return PricedInRiskLabelEnum.MEDIUM, {"basis": "missing_evidence_time", "attributed": False}
 
         freshest = max(published_times)
         age_hours = max((datetime.now(UTC) - freshest).total_seconds() / 3600, 0.0)
         if age_hours <= 6:
-            return PricedInRiskLabelEnum.LOW
+            return PricedInRiskLabelEnum.LOW, {"basis": "source_age_fallback", "attributed": False}
         if age_hours <= 24:
-            return PricedInRiskLabelEnum.MEDIUM
+            return PricedInRiskLabelEnum.MEDIUM, {"basis": "source_age_fallback", "attributed": False}
         if market is not None and market.spread is not None and market.spread <= 0.03:
-            return PricedInRiskLabelEnum.HIGH
-        return PricedInRiskLabelEnum.HIGH
+            return PricedInRiskLabelEnum.HIGH, {"basis": "source_age_fallback", "attributed": False}
+        return PricedInRiskLabelEnum.HIGH, {"basis": "source_age_fallback", "attributed": False}
+
+    @staticmethod
+    def _price_history_signal(
+        market: Market | None,
+        source_contexts: list[SourceContext],
+    ) -> dict[str, Any] | None:
+        if market is None:
+            return None
+        points = sorted(
+            (point for point in market.price_points if point.outcome == "yes"),
+            key=lambda point: point.observed_at,
+        )
+        evidence_times = [
+            context.source.published_at or context.source.fetched_at
+            for context in source_contexts
+            if context.source.source_kind != SourceKindEnum.MANUAL_INPUT
+        ]
+        if len(points) < 2 or not evidence_times:
+            return None
+        evidence_time = max(evidence_times)
+        before = [point for point in points if point.observed_at <= evidence_time]
+        after = [point for point in points if point.observed_at > evidence_time]
+        if not before or not after:
+            return None
+        movement = round(after[-1].price - before[-1].price, 4)
+        magnitude = abs(movement)
+        risk = "high" if magnitude >= 0.05 else "medium" if magnitude >= 0.02 else "low"
+        return {
+            "basis": "clob_price_history",
+            "risk": risk,
+            "attributed": magnitude >= 0.02,
+            "evidence_published_at": evidence_time.isoformat(),
+            "price_before": before[-1].price,
+            "price_after": after[-1].price,
+            "movement": movement,
+            "reason": (
+                "The market moved after the newest retained evidence was published."
+                if magnitude >= 0.02
+                else "No material move followed the newest retained evidence."
+            ),
+        }
 
     def _confidence_label(
         self,

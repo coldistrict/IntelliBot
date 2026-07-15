@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base
 from app.db.session import get_db_session
-from app.main import app
+from app.main import app, settings
 from app.services.analysis_dispatch import AnalysisDispatcher, get_analysis_dispatcher
 from app.services.analysis_pipeline import AnalysisProcessor, get_analysis_processor
 
@@ -31,6 +31,7 @@ def session_factory(tmp_path) -> Generator[sessionmaker[Session], None, None]:
 
 @pytest.fixture
 def client(session_factory: sessionmaker[Session]) -> Generator[TestClient, None, None]:
+    settings.outcome_refresh_enabled = False
     def override_db() -> Generator[Session, None, None]:
         session = session_factory()
         try:

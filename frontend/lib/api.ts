@@ -42,6 +42,9 @@ export type CalibrationSlice = Schema<"SliceStats">;
 export type ResolvedRunRow = Schema<"ResolvedRunRow">;
 export type PendingRunRow = Schema<"PendingRunRow">;
 export type OutcomeRefreshSummary = Schema<"OutcomeRefreshResponse">;
+export type MarketLinkCandidate = Schema<"MarketLinkCandidate">;
+export type MarketLinkCandidates = Schema<"MarketLinkCandidatesResponse">;
+export type JournalEvent = Schema<"JournalEventResponse">;
 
 function extractValidationMessage(detail: unknown): string | null {
   if (!Array.isArray(detail) || detail.length === 0) {
@@ -149,6 +152,40 @@ export async function createManualAnalysis(
   payload: ManualAnalysisPayload,
 ): Promise<QueuedAnalysisResponse> {
   return fetchJson<QueuedAnalysisResponse>("/api/analyses/manual", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchMarketLinkCandidates(customClaim: string): Promise<MarketLinkCandidates> {
+  return fetchJson<MarketLinkCandidates>("/api/markets/link-candidates", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ custom_claim: customClaim }),
+  });
+}
+
+export async function fetchJournal(id: string | number): Promise<Schema<"JournalResponse">> {
+  return fetchJson<Schema<"JournalResponse">>(`/api/analyses/${id}/journal`);
+}
+
+export async function saveBeforeJournal(
+  id: string | number,
+  payload: Schema<"JournalBeforeRequest">,
+): Promise<JournalEvent> {
+  return fetchJson<JournalEvent>(`/api/analyses/${id}/journal/before`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function saveAfterJournal(
+  id: string | number,
+  payload: Schema<"JournalAfterRequest">,
+): Promise<JournalEvent> {
+  return fetchJson<JournalEvent>(`/api/analyses/${id}/journal/after`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

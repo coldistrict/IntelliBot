@@ -56,6 +56,7 @@ function hasTemplate(value: AnalysisSummary["template_selected"]): value is NonN
 
 function AnalysisRow({ item }: { item: AnalysisSummary }) {
   const progressPercent = item.progress_percent ?? 0;
+  const estimatedCost = item.estimated_cost_usd ?? 0;
 
   return (
     <Link
@@ -71,6 +72,18 @@ function AnalysisRow({ item }: { item: AnalysisSummary }) {
           {item.latest_confidence_label ? (
             <Badge variant="muted">{item.latest_confidence_label.replaceAll("_", " ")}</Badge>
           ) : null}
+          <Badge variant={item.quality_state === "clean" ? "yes" : item.quality_state === "invalid" ? "no" : "warning"}>
+            quality {item.quality_state ?? "unknown"}
+          </Badge>
+          {item.market_match_confidence ? (
+            <Badge variant="muted">match {item.market_match_confidence.replaceAll("_", " ")}</Badge>
+          ) : null}
+          {item.journal_event_count ? <Badge variant="muted">journal {item.journal_event_count}</Badge> : null}
+          <Badge variant="muted">
+            {estimatedCost > 0 && estimatedCost < 0.01
+              ? "cost < $0.01"
+              : `cost $${estimatedCost.toFixed(2)}`}
+          </Badge>
         </div>
         <h3 className="mt-2 break-words text-base font-semibold leading-6 text-ink">
           {item.market_title ?? item.input_text}
@@ -108,6 +121,8 @@ function AnalysisRow({ item }: { item: AnalysisSummary }) {
 
 export function HistoryList() {
   const [items, setItems] = useState<AnalysisSummary[]>([]);
+  const [total, setTotal] = useState(0);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [query, setQuery] = useState("");
@@ -116,8 +131,10 @@ export function HistoryList() {
 
   const load = useCallback(async () => {
     try {
-      const payload = await fetchAnalyses();
+      const payload = await fetchAnalyses({ limit: 100 });
       setItems(payload.items);
+      setTotal(payload.total);
+      setStatusCounts(payload.status_counts ?? {});
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load analyses.");
@@ -164,10 +181,7 @@ export function HistoryList() {
       return true;
     });
   }, [items, query, statusFilter, templateFilter]);
-  const running = useMemo(
-    () => items.filter((item) => isActiveStatus(item.status)),
-    [items],
-  );
+  const runningCount = (statusCounts.queued ?? 0) + (statusCounts.running ?? 0);
   const filteredRunning = useMemo(
     () => filteredItems.filter((item) => isActiveStatus(item.status)),
     [filteredItems],
@@ -176,7 +190,7 @@ export function HistoryList() {
     () => filteredItems.filter((item) => !isActiveStatus(item.status)),
     [filteredItems],
   );
-  const failedCount = useMemo(() => items.filter((item) => item.status === "failed").length, [items]);
+  const failedCount = statusCounts.failed ?? 0;
   const hasFilters = query.trim().length > 0 || statusFilter !== "all" || templateFilter !== "all";
 
   function resetFilters() {
@@ -285,7 +299,7 @@ export function HistoryList() {
             ))}
           </div>
           <p className="text-sm text-ink/60">
-            Showing {filteredItems.length} of {items.length} runs
+            Showing {filteredItems.length} loaded of {total} runs
           </p>
         </div>
       </Panel>
@@ -293,12 +307,12 @@ export function HistoryList() {
       <section className="grid gap-3 sm:grid-cols-3">
         <Panel className="p-4">
           <p className="section-label">Total</p>
-          <p className="stat-number mt-2">{items.length}</p>
+          <p className="stat-number mt-2">{total}</p>
           <p className="mt-1 text-sm text-ink/60">Runs in the log</p>
         </Panel>
         <Panel className="p-4">
           <p className="section-label">Running</p>
-          <p className="stat-number mt-2">{running.length}</p>
+          <p className="stat-number mt-2">{runningCount}</p>
           <p className="mt-1 text-sm text-ink/60">Currently moving</p>
         </Panel>
         <Panel className="p-4">

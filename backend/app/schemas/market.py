@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas.common import ORMModel
 
@@ -72,3 +72,21 @@ class PublicMarketListResponse(BaseModel):
     items: list[PublicMarketResponse]
     total: int
     has_more: bool = False
+
+
+class MarketLinkCandidate(BaseModel):
+    market_id: str
+    title: str
+    score: float
+    margin: float
+    reason_codes: list[str]
+    confidence: str
+
+
+class MarketLinkCandidatesRequest(BaseModel):
+    custom_claim: str = Field(min_length=5, max_length=500)
+
+
+class MarketLinkCandidatesResponse(BaseModel):
+    candidates: list[MarketLinkCandidate]
+    auto_link: bool

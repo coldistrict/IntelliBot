@@ -87,7 +87,12 @@ class TavilyClient:
     @staticmethod
     def _classify_source_tier(url: str) -> SourceTierEnum:
         domain = url.split("/")[2].lower() if "://" in url else url.lower()
-        if domain.endswith(".gov") or domain.endswith(".mil") or "federalreserve.gov" in domain:
+        if (
+            domain.endswith(".gov")
+            or domain.endswith(".mil")
+            or ".gov." in domain
+            or any(host in domain for host in {"federalreserve.gov", "banrep.gov.co", "ecb.europa.eu", "bankofengland.co.uk"})
+        ):
             return SourceTierEnum.OFFICIAL_PRIMARY
         if any(host in domain for host in {"wsj.com", "nytimes.com", "ft.com"}):
             return SourceTierEnum.PREMIUM_NEWS

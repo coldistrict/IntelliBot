@@ -8,7 +8,7 @@ from app.clients.polymarket_client import PolymarketClient
 from app.db.session import get_db_session
 from app.schemas.calibration import CalibrationScoreboardResponse, OutcomeRefreshResponse
 from app.services.calibration import build_scoreboard
-from app.services.outcome_tracker import refresh_market_outcomes
+from app.services.outcome_refresh_scheduler import get_outcome_refresh_coordinator
 
 router = APIRouter(prefix="/calibration")
 
@@ -29,5 +29,5 @@ def refresh_outcomes(
     session: Session = Depends(get_db_session),
     client: PolymarketClient = Depends(get_polymarket_client),
 ) -> OutcomeRefreshResponse:
-    summary = refresh_market_outcomes(session, client=client)
+    summary = get_outcome_refresh_coordinator().refresh(session, client=client, force=True)
     return OutcomeRefreshResponse(**asdict(summary))

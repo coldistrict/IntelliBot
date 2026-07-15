@@ -466,13 +466,14 @@ def test_priced_in_risk_uses_social_narrative_phase():
         },
     )()
 
-    risk = processor._priced_in_risk(
+    risk, signal = processor._priced_in_risk(
         None,
         [],
         social_summary,
     )
 
     assert risk == PricedInRiskLabelEnum.HIGH
+    assert signal["basis"] == "social_narrative"
 
 
 def test_social_normalization_preserves_broad_strength_without_trusted_posts():

@@ -6,15 +6,18 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.api.routes.calibration import get_polymarket_client
 from app.clients.polymarket_client import PolymarketClient, ResolvedMarketRecord
 from app.main import app
-from app.models import AnalysisRequest, AnalysisRun, Market, RuleParse, Snapshot
+from app.models import AnalysisRequest, AnalysisRun, JournalEvent, Market, PublishedForecast, RuleParse, Snapshot
 from app.models.enums import (
+    AttemptReasonEnum,
     ClaimFamilyEnum,
     ConfidenceLabelEnum,
     InputTypeEnum,
+    JournalEventTypeEnum,
     ModeEnum,
     PricedInRiskLabelEnum,
     RecommendationLabelEnum,
     RequestStatusEnum,
+    RunQualityEnum,
     SnapshotTypeEnum,
     TemplateKey,
 )
@@ -120,6 +123,23 @@ def _seed_completed_run(
         created_at=now,
     )
     session.add(run)
+    session.flush()
+    session.add(
+        PublishedForecast(
+            analysis_run_id=run.id,
+            request_id=request.id,
+            market_id=market.id if market else None,
+            published_at=now,
+            model_version="test-model",
+            prompt_versions_json={},
+            market_snapshot_json={},
+            quality_state=RunQualityEnum.CLEAN,
+            attempt_reason=AttemptReasonEnum.ORIGINAL,
+            is_repeat=False,
+            p_hat=p_hat,
+            market_mid_prob=market_mid_prob,
+        )
+    )
     session.commit()
     session.refresh(run)
     return run
@@ -337,3 +357,46 @@ def test_scoreboard_preserves_tiny_nonzero_briers(client, session_factory: sessi
     assert 0 < row["model_brier"] < 0.001
     assert 0 < row["market_brier"] < 0.001
     assert 0 < payload["summary"]["avg_model_brier"] < 0.001
+
+
+def test_scoreboard_separates_repeats_and_scores_decision_journal(
+    client, session_factory: sessionmaker[Session]
+):
+    with session_factory() as session:
+        market = _seed_market(
+            session,
+            polymarket_id="journal-market",
+            title="Journal market",
+            resolved_outcome="yes",
+        )
+        first = _seed_completed_run(session, market=market, p_hat=0.70, market_mid_prob=0.55)
+        second = _seed_completed_run(session, market=market, p_hat=0.75, market_mid_prob=0.60)
+        second.published_forecast.is_repeat = True
+        session.add_all(
+            [
+                JournalEvent(
+                    analysis_run_id=first.id,
+                    event_type=JournalEventTypeEnum.BEFORE,
+                    payload_json={"prior_probability": 0.35, "intended_action": "no_bet"},
+                    created_at=datetime.now(UTC),
+                ),
+                JournalEvent(
+                    analysis_run_id=first.id,
+                    event_type=JournalEventTypeEnum.AFTER,
+                    payload_json={"decision": "yes", "conviction": 4},
+                    created_at=datetime.now(UTC),
+                ),
+            ]
+        )
+        session.commit()
+
+    payload = client.get("/api/calibration/scoreboard").json()
+    summary = payload["summary"]
+    assert summary["published_forecasts"] == 2
+    assert summary["distinct_markets"] == 1
+    assert summary["repeated_forecasts"] == 1
+    assert summary["user_before_runs"] == 1
+    assert summary["avg_user_before_brier"] == 0.4225
+    assert summary["user_after_runs"] == 1
+    assert summary["avg_user_after_brier"] == 0.0
+    assert sum(1 for row in payload["resolved"] if row["is_repeat"]) == 1

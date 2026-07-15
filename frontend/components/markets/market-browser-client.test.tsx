@@ -106,6 +106,9 @@ describe("MarketBrowserClient", () => {
         current_stage_note: "Queued.",
         display_summary: "Queued.",
         qualitative_label: null,
+        estimated_cost_usd: 0,
+        journal_event_count: 0,
+        quality_state: "unknown",
       },
     });
   });
@@ -312,6 +315,9 @@ describe("MarketDetailClient", () => {
         current_stage_note: "Queued.",
         display_summary: "Queued.",
         qualitative_label: null,
+        estimated_cost_usd: 0,
+        journal_event_count: 0,
+        quality_state: "unknown",
       },
     });
   });
@@ -403,6 +409,9 @@ describe("MarketDetailClient", () => {
           current_stage_note: "Done.",
           display_summary: "Done.",
           qualitative_label: "leans_no",
+          estimated_cost_usd: 0,
+          journal_event_count: 0,
+          quality_state: "clean",
         },
       ],
       total: 1,

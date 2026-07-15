@@ -21,6 +21,32 @@ class RequestStatusEnum(str, Enum):
     FAILED = "failed"
 
 
+class RunQualityEnum(str, Enum):
+    UNKNOWN = "unknown"
+    CLEAN = "clean"
+    WARNING = "warning"
+    INVALID = "invalid"
+
+
+class ExecutionResultModeEnum(str, Enum):
+    MODEL = "model"
+    DETERMINISTIC_FALLBACK = "deterministic_fallback"
+    SKIPPED = "skipped"
+    FAILED = "failed"
+
+
+class AttemptReasonEnum(str, Enum):
+    ORIGINAL = "original"
+    INTENTIONAL_RERUN = "intentional_rerun"
+    RETRY = "retry"
+    RECOVERY = "recovery"
+
+
+class JournalEventTypeEnum(str, Enum):
+    BEFORE = "before"
+    AFTER = "after"
+
+
 class TemplateKey(str, Enum):
     OFFICIAL_EVENT = "official_event"
     MACRO_POLICY = "macro_policy"

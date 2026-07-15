@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
 
@@ -40,12 +40,21 @@ class ResolvedMarketRecord:
     closed: bool = False
     resolved_outcome: str | None = None
     closed_time: datetime | None = None
+    yes_token_id: str | None = None
+    no_token_id: str | None = None
+
+
+@dataclass(frozen=True)
+class PriceHistoryPoint:
+    observed_at: datetime
+    price: float
 
 
 class PolymarketClient:
     def __init__(self, *, enabled: bool = True) -> None:
         settings = get_settings()
         self.base_url = settings.polymarket_gamma_base_url.rstrip("/")
+        self.clob_base_url = settings.polymarket_clob_base_url.rstrip("/")
         self.enabled = enabled
 
     def get_market_by_id(self, market_id: str) -> ResolvedMarketRecord | None:
@@ -69,6 +78,31 @@ class PolymarketClient:
             return []
 
         return self._records_from_search_payload(payload, limit=limit)
+
+    def get_price_history(self, token_id: str) -> list[PriceHistoryPoint]:
+        if not self.enabled or not token_id:
+            return []
+        payload = self._get_json_from(
+            self.clob_base_url,
+            "/prices-history",
+            params={"market": token_id, "interval": "max", "fidelity": 60},
+        )
+        history = payload.get("history", []) if isinstance(payload, dict) else []
+        points: list[PriceHistoryPoint] = []
+        for row in history:
+            if not isinstance(row, dict):
+                continue
+            timestamp = self._coerce_float(row.get("t"))
+            price = self._coerce_float(row.get("p"))
+            if timestamp is None or price is None or not 0 <= price <= 1:
+                continue
+            points.append(
+                PriceHistoryPoint(
+                    observed_at=datetime.fromtimestamp(timestamp, tz=UTC),
+                    price=price,
+                )
+            )
+        return sorted(points, key=lambda point: point.observed_at)
 
     def discover_markets(
         self,
@@ -158,9 +192,18 @@ class PolymarketClient:
         return self._record_from_payload(payload)
 
     def _get_json(self, path: str, *, params: HttpQueryParams | None = None) -> Any | None:
+        return self._get_json_from(self.base_url, path, params=params)
+
+    @staticmethod
+    def _get_json_from(
+        base_url: str,
+        path: str,
+        *,
+        params: HttpQueryParams | None = None,
+    ) -> Any | None:
         try:
             with httpx.Client(timeout=20.0) as client:
-                response = client.get(f"{self.base_url}{path}", params=params)
+                response = client.get(f"{base_url}{path}", params=params)
                 response.raise_for_status()
         except httpx.HTTPError:
             return None
@@ -215,7 +258,9 @@ class PolymarketClient:
     ) -> ResolvedMarketRecord:
         outcomes = self._coerce_json_list(payload.get("outcomes"))
         outcome_prices = self._coerce_json_list(payload.get("outcomePrices"))
+        token_ids = self._coerce_json_list(payload.get("clobTokenIds"))
         yes_price, no_price = self._resolve_binary_prices(outcomes, outcome_prices)
+        yes_token_id, no_token_id = self._resolve_binary_tokens(outcomes, token_ids)
         best_bid = self._coerce_float(payload.get("bestBid"))
         best_ask = self._coerce_float(payload.get("bestAsk"))
         slug = event_slug or payload.get("slug")
@@ -265,6 +310,8 @@ class PolymarketClient:
             closed_time=self._coerce_datetime(
                 payload.get("closedTime") or payload.get("umaEndDate")
             ),
+            yes_token_id=yes_token_id,
+            no_token_id=no_token_id,
         )
 
     @staticmethod
@@ -289,6 +336,13 @@ class PolymarketClient:
     @staticmethod
     def _coerce_string(value: object) -> str | None:
         return str(value).strip() if value is not None and str(value).strip() else None
+
+    @staticmethod
+    def _resolve_binary_tokens(
+        outcomes: list[str], token_ids: list[str]
+    ) -> tuple[str | None, str | None]:
+        mapped = {outcome.strip().lower(): token for outcome, token in zip(outcomes, token_ids)}
+        return mapped.get("yes"), mapped.get("no")
 
     @staticmethod
     def _coerce_bool(value: object) -> bool:

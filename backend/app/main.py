@@ -8,8 +8,12 @@ from app.api.router import api_router
 from app.config.settings import get_settings
 from app.services.analysis_dispatch import get_analysis_dispatcher
 from app.services.analysis_pipeline import get_analysis_processor
+from app.services.outcome_refresh_scheduler import start_outcome_scheduler
 
-logger = logging.getLogger(__name__)
+# Uvicorn configures this logger with the server's visible stderr handler.
+# Keeping application lifecycle events below it makes them operator-visible
+# without replacing the host process's logging configuration.
+logger = logging.getLogger("uvicorn.error").getChild("intellibot")
 
 settings = get_settings()
 
@@ -24,7 +28,19 @@ async def lifespan(app: FastAPI):
     )
     if reconciled:
         logger.info("Requeued %s stale analysis request(s) during startup.", len(reconciled))
-    yield
+    scheduler = None
+    if settings.outcome_refresh_enabled:
+        scheduler = start_outcome_scheduler(
+            session_factory=processor.session_factory,
+            interval_minutes=settings.outcome_refresh_interval_minutes,
+            cooldown_seconds=settings.outcome_refresh_cooldown_seconds,
+            startup_retry_seconds=settings.outcome_refresh_startup_retry_seconds,
+        )
+    try:
+        yield
+    finally:
+        if scheduler is not None:
+            scheduler.shutdown(wait=False)
 
 
 app = FastAPI(
